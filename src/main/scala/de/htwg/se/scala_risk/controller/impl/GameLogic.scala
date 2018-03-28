@@ -2,16 +2,11 @@ package de.htwg.se.scala_risk.controller.impl
 
 import de.htwg.se.scala_risk.util.Statuses
 import de.htwg.se.scala_risk.controller.{ GameLogic => TGameLogic }
-import de.htwg.se.scala_risk.model.Continent
-import de.htwg.se.scala_risk.model.Country
-import de.htwg.se.scala_risk.model.Player
-import de.htwg.se.scala_risk.model.World
+import de.htwg.se.scala_risk.model._
 import de.htwg.se.scala_risk.util.XML
 import java.io.File
 import java.io.FileOutputStream
 import scala.io.Source
-import javax.inject.Inject
-import javax.inject.Singleton
 
 //@Singleton
 class GameLogic /*@Inject()*/ (world: World) extends TGameLogic {
@@ -21,14 +16,14 @@ class GameLogic /*@Inject()*/ (world: World) extends TGameLogic {
 
   private[impl] var attackerDefenderIndex: (Int, Int) = (-1, -1)
   private[impl] var rolledDieces: (List[Int], List[Int]) = (Nil, Nil)
-  private var lastState: scala.xml.Node = null
+  private var lastState: scala.xml.Node = _
   //private[this] val world: World = new de.htwg.se.scala_risk.model.impl.World // Changed to test GUI
 
-  def startGame = {
+  def startGame : Unit ={
     this.setStatus(Statuses.INITIALIZE_PLAYERS)
   }
 
-  def initializeGame() = {
+  def initializeGame() : Unit = {
     val players = world.getPlayerList
 
     if (players.length >= 2) {
@@ -42,17 +37,17 @@ class GameLogic /*@Inject()*/ (world: World) extends TGameLogic {
       }
       world.nextPlayer
       this.setStatus(Statuses.GAME_INITIALIZED)
-      logic
+      logic()
     } else {
       this.setErrorStatus(Statuses.NOT_ENOUGH_PLAYERS)
     }
   }
 
-  def logic = {
+  def logic() : Unit = {
     this.status match {
       case Statuses.GAME_INITIALIZED =>
-        checkContinents();
-        this.troopsToSpread = world.getPlayerList(world.getCurrentPlayerIndex).getTroops();
+        checkContinents()
+        this.troopsToSpread = world.getPlayerList(world.getCurrentPlayerIndex).getTroops()
         this.setStatus(Statuses.PLAYER_SPREAD_TROOPS)
       case Statuses.PLAYER_SPREAD_TROOPS => this.setStatus(Statuses.PLAYER_ATTACK)
       case Statuses.PLAYER_ATTACK => this.setStatus(Statuses.PLAYER_MOVE_TROOPS)
@@ -66,7 +61,7 @@ class GameLogic /*@Inject()*/ (world: World) extends TGameLogic {
         //          this.troopsToSpread = nextPlayer.getTroops()
         //          this.setStatus(Statuses.PLAYER_SPREAD_TROOPS)
         //        }
-        checkContinents();
+        checkContinents()
         this.troopsToSpread = nextPlayer.getTroops()
         this.setStatus(Statuses.PLAYER_SPREAD_TROOPS)
       }
@@ -88,18 +83,18 @@ class GameLogic /*@Inject()*/ (world: World) extends TGameLogic {
     }
   }*/
 
-  def endTurn = {
+  def endTurn : Unit = {
     this.lastState = this.toXml
-    this.logic
+    this.logic()
   }
 
-  private[controller] def setStatus(status: Statuses.Value) = {
+  private[controller] def setStatus(status: Statuses.Value) : Unit = {
     this.status = status
     notifyObservers
   }
 
-  private def setErrorStatus(status: Statuses.Value) = {
-    val oldStatus = this.status;
+  private def setErrorStatus(status: Statuses.Value) : Unit = {
+    val oldStatus = this.status
     this.setStatus(status)
     this.setStatus(oldStatus)
   }
@@ -136,17 +131,17 @@ class GameLogic /*@Inject()*/ (world: World) extends TGameLogic {
       return null
     }
 
-    return (getCountryAsString(this.attackerDefenderIndex._1), getCountryAsString(this.attackerDefenderIndex._2))
+    (getCountryAsString(this.attackerDefenderIndex._1), getCountryAsString(this.attackerDefenderIndex._2))
   }
 
   private def getCountryAsString(index: Int): (String, String, Int, Int) = {
     val country: Country = world.getCountriesList(index)
-    return (country.getName, country.getOwner.getName, country.getTroops, country.getRefColor())
+    (country.getName, country.getOwner.getName, country.getTroops, country.getRefColor())
   }
 
   private def getNeighbours(country: String): List[Country] = {
     val index = this.getCountryIndexByString(country)
-    if (index < 0) this.setErrorStatus(Statuses.COUNTRY_NOT_FOUND); Nil
+    if (index < 0) this.setErrorStatus(Statuses.COUNTRY_NOT_FOUND)
     world.getCountriesList(index).getNeighboringCountries.toList
   }
 
@@ -157,7 +152,7 @@ class GameLogic /*@Inject()*/ (world: World) extends TGameLogic {
 
   def getAvailableColors: List[String] = world.getPlayerColorList.map { x => x.toString() }
 
-  def setPlayer(player: (String, String)) = {
+  def setPlayer(player: (String, String)) : Unit = {
     world.addPlayer(player._1, player._2)
     notifyObservers
   }
@@ -169,7 +164,7 @@ class GameLogic /*@Inject()*/ (world: World) extends TGameLogic {
 
   def getTroopsToSpread: Int = this.troopsToSpread
 
-  def addTroops(country: String, troops: Int) = {
+  def addTroops(country: String, troops: Int) : Unit = {
     val index = this.getCountryIndexByString(country)
     if (index >= 0) {
       if (world.getCountriesList(index).getOwner.equals(world.getPlayerList(world.getCurrentPlayerIndex))) {
@@ -178,7 +173,7 @@ class GameLogic /*@Inject()*/ (world: World) extends TGameLogic {
           val countryList = world.getCountriesList.toList
           countryList(index).setTroops(countryList(index).getTroops + troops)
           troopsToSpread -= troops
-          if (troopsToSpread == 0) logic
+          if (troopsToSpread == 0) logic()
           else notifyObservers
         } else {
           this.setErrorStatus(Statuses.NOT_ENOUGH_TROOPS_TO_SPREAD)
@@ -187,7 +182,7 @@ class GameLogic /*@Inject()*/ (world: World) extends TGameLogic {
     } else this.setErrorStatus(Statuses.COUNTRY_NOT_FOUND)
   }
 
-  def attack(countryAttacker: String, countryDefender: String) = {
+  def attack(countryAttacker: String, countryDefender: String) : Unit = {
     /* Make check if the player attacks his own country easier */
     if (this.getCurrentPlayer._1.toUpperCase().equals(this.getOwnerName(countryDefender))) {
       this.setErrorStatus(Statuses.PLAYER_ATTACKING_HIS_COUNTRY)
@@ -200,7 +195,7 @@ class GameLogic /*@Inject()*/ (world: World) extends TGameLogic {
       } else {
         if (this.status == Statuses.PLAYER_ATTACK) {
           this.lastState = this.toXml
-          this.attackerDefenderIndex = getAttackIndexes(countryAttacker, countryDefender);
+          this.attackerDefenderIndex = getAttackIndexes(countryAttacker, countryDefender)
           if (attackerDefenderIndex._1 != -1) {
             this.rolledDieces = this.rollDice(
               world.getCountriesList(attackerDefenderIndex._1),
@@ -225,18 +220,17 @@ class GameLogic /*@Inject()*/ (world: World) extends TGameLogic {
   private[impl] def getExtantTroops(troopsAttacker: Int, troopsDefender: Int, min: Int): (Int, Int) = {
     var extantTroopsAttacker = troopsAttacker
     var extantTroopsDefender = troopsDefender
-    var i = 0
-    for (i <- 0 to min - 1) {
+    for (i <- 0 until min) {
       if (this.rolledDieces._1(i) > this.rolledDieces._2(i)) {
         extantTroopsDefender -= 1
       } else {
         extantTroopsAttacker -= 1
       }
     }
-    return (extantTroopsAttacker, extantTroopsDefender)
+    (extantTroopsAttacker, extantTroopsDefender)
   }
 
-  private[impl] def checkConquered(extantTroopsDefender: Int, countryDefender: String) = {
+  private[impl] def checkConquered(extantTroopsDefender: Int, countryDefender: String) : Unit = {
     if (extantTroopsDefender == 0) {
       world.getCountriesList(attackerDefenderIndex._2).setOwner(world.getCountriesList(attackerDefenderIndex._1).getOwner)
 
@@ -246,7 +240,7 @@ class GameLogic /*@Inject()*/ (world: World) extends TGameLogic {
         this.setStatus(Statuses.PLAYER_CONQUERED_A_COUNTRY)
       }
     } else {
-      this.clearAttack
+      this.clearAttack()
       this.setStatus(Statuses.PLAYER_ATTACK)
     }
   }
@@ -268,12 +262,12 @@ class GameLogic /*@Inject()*/ (world: World) extends TGameLogic {
     (-1, -1)
   }
 
-  private[this] def clearAttack = {
+  private[this] def clearAttack() : Unit = {
     this.attackerDefenderIndex = (-1, -1)
     this.rolledDieces = (Nil, Nil)
   }
 
-  def moveTroops(count: Int) = {
+  def moveTroops(count: Int) : Unit = {
     if (this.status == Statuses.PLAYER_CONQUERED_A_COUNTRY || this.status == Statuses.PLAYER_CONQUERED_A_CONTINENT || this.status == Statuses.PLAYER_MOVE_TROOPS) {
       val currentTroops = world.getCountriesList(this.attackerDefenderIndex._1).getTroops
       if (count < 1 || count >= currentTroops)
@@ -281,13 +275,13 @@ class GameLogic /*@Inject()*/ (world: World) extends TGameLogic {
       else if (this.status == Statuses.PLAYER_CONQUERED_A_COUNTRY || this.status == Statuses.PLAYER_CONQUERED_A_CONTINENT) {
         world.getCountriesList(this.attackerDefenderIndex._1).setTroops(currentTroops - count)
         world.getCountriesList(this.attackerDefenderIndex._2).setTroops(count)
-        this.clearAttack
+        this.clearAttack()
         this.setStatus(Statuses.PLAYER_ATTACK)
       } else {
         this.lastState = this.toXml
         world.getCountriesList(this.attackerDefenderIndex._1).setTroops(currentTroops - count)
         world.getCountriesList(this.attackerDefenderIndex._2).setTroops(world.getCountriesList(this.attackerDefenderIndex._2).getTroops + count)
-        this.clearAttack
+        this.clearAttack()
         this.setStatus(Statuses.PLAYER_MOVE_TROOPS)
       }
     }
@@ -295,14 +289,14 @@ class GameLogic /*@Inject()*/ (world: World) extends TGameLogic {
 
   private[this] def getCountryIndexByString(country: String): Int = world.getCountriesList.indexWhere { x => x.getName.toUpperCase().equals(country.toUpperCase()) }
 
-  def dragTroops(countryFrom: String, countryTo: String, troops: Int) = {
+  def dragTroops(countryFrom: String, countryTo: String, troops: Int) : Unit = {
     if (this.status == Statuses.PLAYER_MOVE_TROOPS) {
       this.attackerDefenderIndex = (
         this.getCountryIndexByString(countryFrom),
         this.getCountryIndexByString(countryTo)
       )
       if (this.attackerDefenderIndex._1 < 0 || this.attackerDefenderIndex._2 < 0) {
-        this.clearAttack
+        this.clearAttack()
         this.setErrorStatus(Statuses.COUNTRY_NOT_FOUND)
       } else {
         if (!this.getNeighbours(countryFrom).map { x => x.getName.toUpperCase() }.contains(countryTo)) {
@@ -321,7 +315,7 @@ class GameLogic /*@Inject()*/ (world: World) extends TGameLogic {
     val toopsDefender = defender.getTroops
     var dicesAttacker: List[Int] = Nil
     var dicesDefender: List[Int] = Nil
-    //return (6 :: 6 :: 6 :: Nil, 5 :: 5 :: 5 :: Nil) // TODO: for testing remove comment 
+    //return (6 :: 6 :: 6 :: Nil, 5 :: 5 :: 5 :: Nil) // TODO: for testing remove comment
     if (troopsAttacker > 1) {
       troopsAttacker match {
         case 2 => dicesAttacker = List.fill(1)(randomDice())
@@ -333,17 +327,17 @@ class GameLogic /*@Inject()*/ (world: World) extends TGameLogic {
         case _ => dicesDefender = List.fill(2)(randomDice())
         //case _ => dicesDefender = List.fill(3)(randomDice())
       }
-      return (dicesAttacker.sortWith(_ > _), dicesDefender.sortWith(_ > _))
+      (dicesAttacker.sortWith(_ > _), dicesDefender.sortWith(_ > _))
     } else {
       this.setErrorStatus(Statuses.NOT_ENOUGH_TROOPS_TO_ATTACK)
-      return (Nil, Nil)
+      (Nil, Nil)
     }
   }
   // Function to get dice values from 1 to 6
   def randomDice(): Int = ((Math.random() * 6) + 1).toInt
 
   def getCurrentPlayerColor(): String = {
-    return world.getPlayerList(world.getCurrentPlayerIndex).getColor.toString()
+    world.getPlayerList(world.getCurrentPlayerIndex).getColor.toString()
   }
 
   def getOwnerColor(owner: String): Int = {
@@ -361,14 +355,14 @@ class GameLogic /*@Inject()*/ (world: World) extends TGameLogic {
       case "ORANGE" => intcolor = -355265
       case _ => intcolor = 0
     }
-    return intcolor
+    intcolor
   }
 
   def getOwnerName(country: String): String = {
     val countryList = world.getCountriesList
     var ownerName = ""
     countryList.foreach { x => if (x.getName.toUpperCase().equals(country.toUpperCase())) { ownerName = x.getOwner.getName.toUpperCase() } }
-    return ownerName
+    ownerName
   }
 
   def checkContinents() {
@@ -383,10 +377,10 @@ class GameLogic /*@Inject()*/ (world: World) extends TGameLogic {
     val continentList = world.getContinentList
     var continentName = ""
     continentList.foreach { x => if (x.getIncludedCountries().map { y => y.getName }.contains(countryName)) { continentName = x.getOwner().getName } }
-    return continentName
+    continentName
   }
 
-  def saveGame = {
+  def saveGame : Unit = {
     val file: File = new File("./save/savegame.xml")
     val fos: FileOutputStream = new FileOutputStream(file, false)
     val saveXML: Array[Byte] = this.toXml.toString().getBytes
@@ -394,7 +388,7 @@ class GameLogic /*@Inject()*/ (world: World) extends TGameLogic {
     fos.close()
   }
 
-  def loadGame = {
+  def loadGame : Unit = {
     val filename = "./save/savegame.xml"
     //this.fromXml(scala.xml.XML.loadFile(filename))
     this.fromXml(scala.xml.XML.load(new java.io.InputStreamReader(new java.io.FileInputStream(filename), "UTF-8")))
@@ -422,34 +416,34 @@ class GameLogic /*@Inject()*/ (world: World) extends TGameLogic {
       val xmlEl = <listEl>{ x }</listEl>
       secondList = XML.addXmlChild(secondList, xmlEl).asInstanceOf[scala.xml.Elem]
     })
-    return XML.addXmlChild(XML.addXmlChild(xml, firstList).asInstanceOf[scala.xml.Elem], secondList).asInstanceOf[scala.xml.Elem]
+    XML.addXmlChild(XML.addXmlChild(xml, firstList).asInstanceOf[scala.xml.Elem], secondList).asInstanceOf[scala.xml.Elem]
   }
 
   def getAttackerDefenderIndexXml(node: (Int, Int)): scala.xml.Elem = {
     val xml = <tuple></tuple>
     val first = <element id="first">{ node._1 }</element>
     val second = <element id="second">{ node._2 }</element>
-    return XML.addXmlChild(XML.addXmlChild(xml, first).asInstanceOf[scala.xml.Elem], second).asInstanceOf[scala.xml.Elem]
+    XML.addXmlChild(XML.addXmlChild(xml, first).asInstanceOf[scala.xml.Elem], second).asInstanceOf[scala.xml.Elem]
   }
 
-  def fromXml(node: scala.xml.Node) = {
+  def fromXml(node: scala.xml.Node) : Unit = {
     // get status
     this.status = Statuses.withName((node \ "status").text.toUpperCase())
     // get attackerDefenderIndex
-    this.attackerDefenderIndex = ((node \ "attackerDefenderIndex")(0).child.head.child.head.text.toInt, (node \ "attackerDefenderIndex")(0).child.head.child.last.text.toInt)
+    this.attackerDefenderIndex = ((node \ "attackerDefenderIndex").head.child.head.child.head.text.toInt, (node \ "attackerDefenderIndex").head.child.head.child.last.text.toInt)
     // get rolledDieces
     var first = List[Int]()
     var second = List[Int]()
-    (node \ "rolledDieces")(0).child.head.child.head.child.foreach(x => first = x.text.toInt :: first)
-    (node \ "rolledDieces")(0).child.head.child.last.child.foreach(x => second = x.text.toInt :: second)
+    (node \ "rolledDieces").head.child.head.child.head.child.foreach(x => first = x.text.toInt :: first)
+    (node \ "rolledDieces").head.child.head.child.last.child.foreach(x => second = x.text.toInt :: second)
     this.rolledDieces = (first.sortWith(_ > _), second.sortWith(_ > _))
     // get troops to spreed
     this.troopsToSpread = (node \ "troopsToSpread").text.toInt
-    this.world.fromXml((node \ "world")(0))
+    this.world.fromXml((node \ "world").head)
     this.notifyObservers
   }
 
-  def undo = {
+  def undo : Unit = {
     if (this.lastState != null) {
       val temp = this.lastState
       this.lastState = null
