@@ -1,15 +1,19 @@
 package de.htwg.se.scala_risk.controller.impl
 
 import de.htwg.se.scala_risk.util.Statuses
-import de.htwg.se.scala_risk.controller.{ GameLogic => TGameLogic }
+import de.htwg.se.scala_risk.controller.{GameLogic => TGameLogic}
 import de.htwg.se.scala_risk.model._
 import de.htwg.se.scala_risk.util.XML
 import java.io.File
 import java.io.FileOutputStream
+import javax.inject
+import javax.inject.Inject
+import javax.inject.Singleton
+
 import scala.io.Source
 
-//@Singleton
-class GameLogic /*@Inject()*/ (world: World) extends TGameLogic {
+@Singleton
+class GameLogic @Inject() (world: World) extends TGameLogic {
 
   private[this] var status: Statuses.Value = Statuses.CREATE_GAME
   private[this] val INIT_TROOPS: Int = 3
