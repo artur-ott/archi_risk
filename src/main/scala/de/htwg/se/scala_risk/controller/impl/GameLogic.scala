@@ -7,11 +7,12 @@ import de.htwg.se.scala_risk.model.Country
 import de.htwg.se.scala_risk.model.Player
 import de.htwg.se.scala_risk.model.World
 import de.htwg.se.scala_risk.util.XML
+import de.htwg.se.scala_risk.controller.actors.WinActor
 import java.io.File
 import java.io.FileOutputStream
-import scala.io.Source
 import javax.inject.Inject
 import javax.inject.Singleton
+import akka.actor.{ActorSystem, Props}
 
 //@Singleton
 class GameLogic /*@Inject()*/ (world: World) extends TGameLogic {
@@ -21,8 +22,10 @@ class GameLogic /*@Inject()*/ (world: World) extends TGameLogic {
 
   private[impl] var attackerDefenderIndex: (Int, Int) = (-1, -1)
   private[impl] var rolledDieces: (List[Int], List[Int]) = (Nil, Nil)
-  private var lastState: scala.xml.Node = null
-  //private[this] val world: World = new de.htwg.se.scala_risk.model.impl.World // Changed to test GUI
+  private var lastState: scala.xml.Node = _
+
+  private[this] val actorSystem: ActorSystem = ActorSystem("WinSystem")
+  private[this] val winActor = this.actorSystem.actorOf(Props[WinActor], "winCounter")
 
   def startGame = {
     this.setStatus(Statuses.INITIALIZE_PLAYERS)
@@ -242,6 +245,7 @@ class GameLogic /*@Inject()*/ (world: World) extends TGameLogic {
 
       if (this.getContinentOwner(countryDefender).toUpperCase().equals(this.getOwnerName(countryDefender).toUpperCase())) {
         this.setStatus(Statuses.PLAYER_CONQUERED_A_CONTINENT)
+        // TODO: check for a win
       } else {
         this.setStatus(Statuses.PLAYER_CONQUERED_A_COUNTRY)
       }
@@ -455,6 +459,10 @@ class GameLogic /*@Inject()*/ (world: World) extends TGameLogic {
       this.lastState = null
       this.fromXml(temp)
     }
+  }
+
+  def checkForAWin : Unit = {
+    this.winActor ! ""
   }
 
 }
