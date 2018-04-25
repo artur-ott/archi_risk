@@ -8,14 +8,15 @@ import de.htwg.se.scala_risk.model.Player
 import de.htwg.se.scala_risk.model.World
 import de.htwg.se.scala_risk.util.XML
 import de.htwg.se.scala_risk.controller.actors.WinActor
+import de.htwg.se.scala_risk.controller.actors.Win
 import java.io.File
 import java.io.FileOutputStream
 import javax.inject.Inject
 import javax.inject.Singleton
 import akka.actor.{ActorSystem, Props}
 
-//@Singleton
-class GameLogic /*@Inject()*/ (world: World) extends TGameLogic {
+@Singleton
+class GameLogic @Inject() (world: World) extends TGameLogic with Win {
 
   private[this] var status: Statuses.Value = Statuses.CREATE_GAME
   private[this] val INIT_TROOPS: Int = 3
@@ -43,6 +44,7 @@ class GameLogic /*@Inject()*/ (world: World) extends TGameLogic {
           x.setOwner(players(countries.indexOf(x) % players.length))
         }
       }
+
       world.nextPlayer
       this.setStatus(Statuses.GAME_INITIALIZED)
       logic
@@ -244,8 +246,8 @@ class GameLogic /*@Inject()*/ (world: World) extends TGameLogic {
       world.getCountriesList(attackerDefenderIndex._2).setOwner(world.getCountriesList(attackerDefenderIndex._1).getOwner)
 
       if (this.getContinentOwner(countryDefender).toUpperCase().equals(this.getOwnerName(countryDefender).toUpperCase())) {
+        this.checkForAWin
         this.setStatus(Statuses.PLAYER_CONQUERED_A_CONTINENT)
-        // TODO: check for a win
       } else {
         this.setStatus(Statuses.PLAYER_CONQUERED_A_COUNTRY)
       }
@@ -461,8 +463,14 @@ class GameLogic /*@Inject()*/ (world: World) extends TGameLogic {
     }
   }
 
-  def checkForAWin : Unit = {
-    this.winActor ! ""
+  private def checkForAWin : Unit = {
+    this.winActor ! WinActor.Init(this, this.world)
   }
 
+  override def win(player: Option[String]): Unit = {
+    player match {
+      case Some(player) => println("Player %s won!".format(player))
+      case None =>
+    }
+  }
 }
