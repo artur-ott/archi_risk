@@ -10,6 +10,11 @@ import javax.inject
 import javax.inject.Inject
 import javax.inject.Singleton
 
+import de.htwg.se.scala_risk.model.database.{ContinentDAO, CountryDAO, PlayerDAO}
+import slick.jdbc.H2Profile.api._
+import slick.jdbc.meta.MTable
+import slick.jdbc.H2Profile
+
 import scala.io.Source
 
 @Singleton
@@ -22,6 +27,17 @@ class GameLogic @Inject() (world: World) extends TGameLogic {
   private[impl] var rolledDieces: (List[Int], List[Int]) = (Nil, Nil)
   private var lastState: scala.xml.Node = _
   //private[this] val world: World = new de.htwg.se.scala_risk.model.impl.World // Changed to test GUI
+
+  val database = Database.forURL("jdbc:h2:~/archi-risk", user = "user")
+
+  var tables = List(
+    TableQuery[ContinentDAO],
+    TableQuery[CountryDAO],
+    TableQuery[PlayerDAO]
+  )
+
+
+
 
   def startGame : Unit ={
     this.setStatus(Statuses.INITIALIZE_PLAYERS)
