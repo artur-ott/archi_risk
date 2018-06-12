@@ -11,7 +11,7 @@ import de.htwg.se.scala_risk.model.impl.World
 import de.htwg.se.scala_risk.model.impl.Country
 import de.htwg.se.scala_risk.util.Statuses
 
-@RunWith(classOf[JUnitRunner])
+/*@RunWith(classOf[JUnitRunner])
 class GameLogicSpec extends WordSpec {
   val world: World = new World
   val gameLogic: GameLogic = new GameLogic(world)
@@ -378,4 +378,4 @@ class GameLogicSpec extends WordSpec {
   //      player should be(gameLogic.getCurrentPlayer)
   //    }
   //  }
-}
+}*/

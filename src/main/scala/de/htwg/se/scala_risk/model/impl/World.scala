@@ -1,13 +1,116 @@
 package de.htwg.se.scala_risk.model.impl
+import akka.actor.ActorSystem
+import akka.http.scaladsl.Http
+import akka.http.scaladsl.model._
+import akka.http.scaladsl.server.Directives._
+import akka.http.scaladsl.unmarshalling.Unmarshal
+import akka.stream.ActorMaterializer
 import de.htwg.se.scala_risk.model.impl.Colors._
-import de.htwg.se.scala_risk.model.{ Player => TPlayer }
-import de.htwg.se.scala_risk.model.{ Country => TCountry }
-import de.htwg.se.scala_risk.model.{ Continent => TContinent }
-import de.htwg.se.scala_risk.model.{ World => TWorld }
-import de.htwg.se.scala_risk.model.impl.{ Player => ImpPlayer }
-import de.htwg.se.scala_risk.model.impl.{ Country => ImpCountry }
+import de.htwg.se.scala_risk.model.{Player => TPlayer}
+import de.htwg.se.scala_risk.model.{Country => TCountry}
+import de.htwg.se.scala_risk.model.{Continent => TContinent}
+import de.htwg.se.scala_risk.model.{World => TWorld}
+import de.htwg.se.scala_risk.model.impl.{Player => ImpPlayer}
+import de.htwg.se.scala_risk.model.impl.{Country => ImpCountry}
 import de.htwg.se.scala_risk.util.XML
+
 import scala.collection.mutable.ArrayBuffer
+
+
+object World {
+  val PORT = 8080
+
+  implicit val system = ActorSystem("Controller")
+  implicit val materializer = ActorMaterializer()
+  val world = new World
+  def main(args: Array[String]): Unit = {
+    server
+  }
+
+  private def server: Unit = {
+    val route =
+      get {
+        path("countrieslist") {
+          complete(HttpEntity(ContentTypes.`application/json`, getCountriesList))
+        } ~
+        path("currentplayerindex") {
+          complete(HttpEntity(ContentTypes.`application/json`, getCurrentPlayerIndex))
+        } ~
+        path("playercolorlist") {
+          complete(HttpEntity(ContentTypes.`application/json`, getPlayerColorList))
+        } ~
+        path("playerlist") {
+          complete(HttpEntity(ContentTypes.`application/json`, getPlayerList))
+        } ~
+        path("continentlist") {
+          complete(HttpEntity(ContentTypes.`application/json`, getContinentList))
+        }
+      } ~
+      put {
+        path("nextplayer") {
+          complete(HttpEntity(ContentTypes.`application/json`, nextPlayer))
+        }
+      } ~
+      post {
+        path("addplayer") {
+          formFields('player.as[String], 'color.as[String]) { (player: String, color: String) => {
+              world.addPlayer(player, color)
+              complete(HttpEntity(ContentTypes.`text/plain(UTF-8)`, ""))
+            }
+          }
+        }
+      }
+    val bindingFuture = Http().bindAndHandle(route, "0.0.0.0", PORT)
+  }
+
+  // GET
+  private def getCurrentPlayerIndex: String = {
+    """{"index":%d}""".format(world.getCurrentPlayerIndex)
+  }
+
+  private def getCountriesList: String = {
+    """{%s}""".format(world.getCountriesList.map(c =>
+      """"%s":{
+         "owner":"%s",
+         "troops": %d,
+         "color": %d,
+         "neighbours": [%s]
+      }
+      """.format(
+        c.getName,
+        c.getOwner.getName,
+        c.getTroops,
+        c.getRefColor(),
+        c.getNeighboringCountries.map(n => """"%s"""".format(n.getName)).mkString(", "))).mkString(", "))
+  }
+
+  private def getPlayerColorList: String = {
+    """{"colors":[%s]}""".format(world.getPlayerColorList.map(c => """"%s"""".format(c.toString)).mkString(", "))
+  }
+
+  private def getPlayerList: String = {
+    """{"players": [%s]}""".format(
+      world.getPlayerList.map(p => """{"name": "%s", "troops": %d, "color": "%s"}""".
+        format(p.getName, p.getTroops(), p.getColor.toString)).mkString(", ")
+    )
+  }
+
+  private def getContinentList: String = {
+    "[%s]".format(
+      world.getContinentList.map(c => """{"owner": "%s", "btroops": %d, "countries": [%s]}""".
+        format(c.getOwner().getName, c.getBonusTroops(), c.getIncludedCountries().map(count => """"%s"""".
+          format(count.getName)).mkString(", "))
+      ).mkString(", ")
+    )
+  }
+
+  // PUT
+  private def nextPlayer: String = {
+    val player = world.nextPlayer
+    """{"name":"%s", "troops":%d}""".format(player.getName, player.getTroops())
+  }
+
+}
 
 /**
  * This object represents the whole world of ScalaRisk.
@@ -302,7 +405,7 @@ class World extends TWorld {
      * This function transforms a String representation of a color into a player
      * usint stringToColor(color : String) (the color is unique).
      *
-     * @param String representation of a color.
+     * @param color representation of a color.
      * @return Player associated with the color, default player if
      * color does not exist or is not taken.
      */
@@ -315,7 +418,7 @@ class World extends TWorld {
      * This function transforms a String representation of a color into a
      * color of type "Color".
      *
-     * @param String representation of a color.
+     * @param color representation of a color.
      * @return The corresponding color or an error code if the color does not exist.
      */
     private[Players] def stringToColor(color: String): Color = {
@@ -334,7 +437,6 @@ class World extends TWorld {
     def nextPlayer(): TPlayer = {
 
       currentPlayer += 1
-      println(currentPlayer)
       if (currentPlayer >= playerList.length)
         currentPlayer = 0
       playerList(currentPlayer)
