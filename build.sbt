@@ -16,9 +16,10 @@ libraryDependencies += "net.codingwell" %% "scala-guice" % "4.1.0"
 libraryDependencies += "org.scala-lang.modules" %% "scala-xml" % "1.0.6"
 libraryDependencies += "org.scala-lang.modules" %% "scala-parser-combinators" % "1.0.4"
 libraryDependencies += "log4j" % "log4j" % "1.2.17"
-libraryDependencies += "ch.qos.logback" % "logback-classic" % "1.2.3"
-libraryDependencies += "com.typesafe.slick" %% "slick" % "3.2.1"
-libraryDependencies += "com.h2database" % "h2" % "1.4.196" % Test
+libraryDependencies += "ch.qos.logback" % "logback-classic" % "1.1.2"
+libraryDependencies += "com.typesafe.slick" %% "slick" % "3.2.2"
+libraryDependencies += "com.typesafe.slick" %% "slick-hikaricp" % "3.2.2"
+libraryDependencies += "org.postgresql" % "postgresql" % "9.3-1100-jdbc41"
 
 
 // import com.github.retronym.SbtOneJar._

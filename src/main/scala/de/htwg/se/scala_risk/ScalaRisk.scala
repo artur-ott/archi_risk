@@ -16,16 +16,22 @@ object ScalaRisk {
     val injector = Guice.createInjector(RiskInjector)
 
     val tui : TUI = injector.instance[TUI]
-    val gui : WelcomeScreen = injector.instance[WelcomeScreen]
+    while (tui.setNextInput(scala.io.StdIn.readLine())) {}
 
-   // val worldFactory = new WorldFactory()
-   // val world = worldFactory.getWorld()
-  //  val gameLogic = new ImplGameLogic(world)
-   // val tui : TUI = new TUI(gameLogic)
-    //val gui : WelcomeScreen = new WelcomeScreen(gameLogic)
+
+    //val gui : WelcomeScreen = injector.instance[WelcomeScreen]
+
+
+    /*
+    val worldFactory = new WorldFactory()
+    val world = worldFactory.getWorld()
+    val gameLogic = new ImplGameLogic(world)
+    val tui : TUI = new TUI(gameLogic)
+    val gui : WelcomeScreen = new WelcomeScreen(gameLogic)
 
     gui.setLocationRelativeTo(null)
     gui.setVisible(true)
+    */
 
     /*
     val clip = AudioSystem.getClip();
@@ -33,7 +39,7 @@ object ScalaRisk {
     clip.loop(Clip.LOOP_CONTINUOUSLY);
     Thread.sleep(1000)
 
-    while (tui.setNextInput(scala.io.StdIn.readLine())) {}
+
 
 */
   }

@@ -6,14 +6,12 @@ import de.htwg.se.scala_risk.model._
 import de.htwg.se.scala_risk.util.XML
 import java.io.File
 import java.io.FileOutputStream
-import javax.inject
 import javax.inject.Inject
 import javax.inject.Singleton
 
 import de.htwg.se.scala_risk.model.database.{ContinentDAO, CountryDAO, PlayerDAO}
-import slick.jdbc.H2Profile.api._
-import slick.jdbc.meta.MTable
-import slick.jdbc.H2Profile
+import slick.jdbc.PostgresProfile.api._
+
 
 import scala.io.Source
 
@@ -28,7 +26,8 @@ class GameLogic @Inject() (world: World) extends TGameLogic {
   private var lastState: scala.xml.Node = _
   //private[this] val world: World = new de.htwg.se.scala_risk.model.impl.World // Changed to test GUI
 
-  val database = Database.forURL("jdbc:h2:~/archi-risk", user = "user")
+  private val DATABASE: Database = Database.forConfig("database")
+  DATABASE.createSession()
 
   var tables = List(
     TableQuery[ContinentDAO],
