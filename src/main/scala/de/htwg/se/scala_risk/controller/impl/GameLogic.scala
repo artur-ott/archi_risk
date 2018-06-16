@@ -9,10 +9,11 @@ import java.io.FileOutputStream
 import javax.inject.Inject
 import javax.inject.Singleton
 
+import scala.concurrent.{Await, Future}
 import de.htwg.se.scala_risk.model.database.{ContinentDAO, CountryDAO, PlayerDAO}
 import slick.jdbc.PostgresProfile.api._
 
-
+import scala.concurrent.duration.Duration
 import scala.io.Source
 
 @Singleton
@@ -35,11 +36,30 @@ class GameLogic @Inject() (world: World) extends TGameLogic {
     TableQuery[PlayerDAO]
   )
 
-
+  val tablePlayer = TableQuery[PlayerDAO]
+  val tableCountry = TableQuery[CountryDAO]
+  val tableContinent = TableQuery[ContinentDAO]
 
 
   def startGame : Unit ={
     this.setStatus(Statuses.INITIALIZE_PLAYERS)
+
+    val action1: DBIO[Unit] = tablePlayer.schema.create
+    val action2: DBIO[Unit] = tableCountry.schema.create
+    val action3: DBIO[Unit] = tableContinent.schema.create
+
+    val future1: Future[Unit] = DATABASE.run(action1)
+    val future2: Future[Unit] = DATABASE.run(action2)
+    val future3: Future[Unit] = DATABASE.run(action3)
+
+    val result1 = Await.result(future1, Duration.fromNanos(2000000000))
+    val result2 = Await.result(future2, Duration.fromNanos(2000000000))
+    val result3 = Await.result(future3, Duration.fromNanos(2000000000))
+
+    println(result1);
+    println(result2);
+    println(result3);
+
   }
 
   def initializeGame() : Unit = {
