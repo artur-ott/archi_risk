@@ -10,11 +10,10 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 import scala.concurrent.{Await, Future}
-import de.htwg.se.scala_risk.model.database.{ContinentDAO, CountryDAO, PlayerDAO}
+import de.htwg.se.scala_risk.model.database._
 import slick.jdbc.PostgresProfile.api._
 
 import scala.concurrent.duration.Duration
-import scala.io.Source
 
 @Singleton
 class GameLogic @Inject() (world: World) extends TGameLogic {
@@ -39,26 +38,36 @@ class GameLogic @Inject() (world: World) extends TGameLogic {
   val tablePlayer = TableQuery[PlayerDAO]
   val tableCountry = TableQuery[CountryDAO]
   val tableContinent = TableQuery[ContinentDAO]
+  val tableWorld = TableQuery[WorldDAO]
+  val tableNeighbor = TableQuery[NeighborDAO]
 
 
   def startGame : Unit ={
     this.setStatus(Statuses.INITIALIZE_PLAYERS)
 
-    val action1: DBIO[Unit] = tablePlayer.schema.create
-    val action2: DBIO[Unit] = tableCountry.schema.create
+    val action1: DBIO[Unit] = tableWorld.schema.create
+    val action2: DBIO[Unit] = tablePlayer.schema.create
     val action3: DBIO[Unit] = tableContinent.schema.create
+    val action4: DBIO[Unit] = tableCountry.schema.create
+    val action5: DBIO[Unit] = tableNeighbor.schema.create
 
     val future1: Future[Unit] = DATABASE.run(action1)
     val future2: Future[Unit] = DATABASE.run(action2)
     val future3: Future[Unit] = DATABASE.run(action3)
+    val future4: Future[Unit] = DATABASE.run(action4)
+    val future5: Future[Unit] = DATABASE.run(action5)
 
     val result1 = Await.result(future1, Duration.fromNanos(2000000000))
     val result2 = Await.result(future2, Duration.fromNanos(2000000000))
     val result3 = Await.result(future3, Duration.fromNanos(2000000000))
+    val result4 = Await.result(future4, Duration.fromNanos(2000000000))
+    val result5 = Await.result(future5, Duration.fromNanos(2000000000))
 
     println(result1);
     println(result2);
     println(result3);
+    println(result4);
+    println(result5);
 
   }
 
