@@ -18,7 +18,7 @@ import scala.collection.mutable.ArrayBuffer
 
 
 object World {
-  val PORT = 8080
+  val PORT = 8081
 
   implicit val system = ActorSystem("Controller")
   implicit val materializer = ActorMaterializer()
@@ -44,6 +44,9 @@ object World {
         } ~
         path("continentlist") {
           complete(HttpEntity(ContentTypes.`application/json`, getContinentList))
+        } ~
+        path("toxml") {
+          complete(HttpEntity(ContentTypes.`application/json`, toXml))
         }
       } ~
       put {
@@ -53,10 +56,29 @@ object World {
       } ~
       post {
         path("addplayer") {
-          formFields('player.as[String], 'color.as[String]) { (player: String, color: String) => {
-              world.addPlayer(player, color)
-              complete(HttpEntity(ContentTypes.`text/plain(UTF-8)`, ""))
-            }
+          formFieldMap { fields =>
+            world.addPlayer(fields("player"), fields("color"))
+            complete("")
+          }
+        } ~
+        path("setowner") {
+          formFieldMap { fields =>
+            world.getCountriesList.
+              filter(c => c.getName == fields("country")).
+              foreach(c => world.getPlayerList.filter(p => p.getName == fields("player")).foreach(p => c.setOwner(p)))
+            complete("")
+          }
+        } ~
+        path("settroops") {
+          formFieldMap { fields =>
+            world.getCountriesList.filter(c => c.getName == fields("country")).foreach(c => c.setTroops(fields("troops").toInt))
+            complete("")
+          }
+        } ~
+        path("setplayertroops") {
+          formFieldMap { fields =>
+            world.getPlayerList.filter(p => p.getName == fields("player")).foreach(p => p.setTroops(fields("troops").toInt))
+            complete("")
           }
         }
       }
@@ -102,6 +124,10 @@ object World {
           format(count.getName)).mkString(", "))
       ).mkString(", ")
     )
+  }
+
+  private def toXml: String = {
+    """{"xml":"%s"}""".format(world.toXml.toString()).replace("\n", " ")
   }
 
   // PUT

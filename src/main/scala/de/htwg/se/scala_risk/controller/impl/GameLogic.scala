@@ -2,7 +2,6 @@ package de.htwg.se.scala_risk.controller.impl
 
 import de.htwg.se.scala_risk.util.Statuses
 import de.htwg.se.scala_risk.controller.{GameLogic => TGameLogic}
-import de.htwg.se.scala_risk.model._
 import de.htwg.se.scala_risk.util.XML
 import java.io.File
 import java.io.FileOutputStream
@@ -12,16 +11,12 @@ import akka.http.scaladsl.model._
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.unmarshalling.Unmarshal
 import akka.stream.ActorMaterializer
-import de.htwg.se.scala_risk.model.impl.Colors.Color
 import javax.inject
 import javax.inject.Inject
 import javax.inject.Singleton
 
-import scala.collection.immutable
-import scala.collection.mutable.ArrayBuffer
 import scala.concurrent.{Await, Future}
 import scala.concurrent.duration.Duration
-import scala.io.Source
 import scala.xml.{Elem, Node}
 
 object GameLogic {
@@ -32,12 +27,10 @@ object GameLogic {
 
 @Singleton
 class GameLogic @Inject() () extends TGameLogic {
-  private val MODEL_PORT = 8080
+  private val MODEL_PORT = 8081
   private val MODEL_IP = "localhost"
 
   val world = new ModelHttp(MODEL_IP, MODEL_PORT)
-  world.addPlayer("Bob", "RED")
-  println(world.getPlayerList.map(p => "{%s, %d, %s}".format(p._1, p._2, p._3)).mkString("\n"))
 
   private[this] var status: Statuses.Value = Statuses.CREATE_GAME
   private[this] val INIT_TROOPS: Int = 3
@@ -132,7 +125,7 @@ class GameLogic @Inject() () extends TGameLogic {
   def getRolledDieces: (List[Int], List[Int]) = this.rolledDieces
 
   /* Country operations */
-  def getCountries: scala.collection.mutable.ArrayBuffer[(String, String, Int, Int)] =
+  def getCountries: List[(String, String, Int, Int)] =
     world.getCountriesList.map { x => (x._1, x._2, x._3, x._4) }
 
   def getCandidates(country: String = ""): List[(String, String, Int)] = {
@@ -142,12 +135,12 @@ class GameLogic @Inject() () extends TGameLogic {
         list.map { x => (x._1, x._2, x._3) }.toList
       }
       case Statuses.PLAYER_ATTACK => {
-        val candidates = getNeighbours(country).filterNot { x => x.getOwner.equals(world.getPlayerList(world.getCurrentPlayerIndex)._1) }
-        candidates.map { x => (x.getName, x.getOwner.getName, x.getTroops) }
+        val candidates = getNeighbours(country).filterNot(x => x._2.equals(world.getPlayerList(world.getCurrentPlayerIndex)._1))
+        candidates.map { x => (x._1, x._2, x._3) }
       }
       case Statuses.PLAYER_MOVE_TROOPS => {
-        val candidates = getNeighbours(country).filter { x => x.getOwner.equals(world.getPlayerList(world.getCurrentPlayerIndex)._1) }
-        candidates.map { x => (x.getName, x.getOwner.getName, x.getTroops) }
+        val candidates = getNeighbours(country).filter { x => x._2.equals(world.getPlayerList(world.getCurrentPlayerIndex)._1) }
+        candidates.map { x => (x._1, x._2, x._3) }
       }
       case _ => Nil
     }
@@ -167,12 +160,11 @@ class GameLogic @Inject() () extends TGameLogic {
     (country._1, country._2, country._3, country._4)
   }
 
-  private def getNeighbours(country: String): List[Country] = {
+  private def getNeighbours(country: String): List[(String, String, Int, Int, List[String])] = {
     val index = this.getCountryIndexByString(country)
     if (index < 0) this.setErrorStatus(Statuses.COUNTRY_NOT_FOUND)
-    // TODO: check where neighbours are used
-    //world.getCountriesList(index).getNeighboringCountries.toList
-    null
+    val countries = world.getCountriesList
+    countries.filter(c => countries(index)._5.contains(c._1))
   }
 
   def getAttackerDefenderIndex: (Int, Int) = this.attackerDefenderIndex
@@ -220,7 +212,7 @@ class GameLogic @Inject() () extends TGameLogic {
       /* Check, if the country to attack is a neighboring country of the
        * attacker country was missing!
        */
-      if (!this.getNeighbours(countryAttacker).map { x => x.getName.toUpperCase() }.contains(countryDefender.toUpperCase())) {
+      if (!this.getNeighbours(countryAttacker).map { x => x._1.toUpperCase() }.contains(countryDefender.toUpperCase())) {
         this.setErrorStatus(Statuses.NOT_A_NEIGHBORING_COUNTRY)
       } else {
         if (this.status == Statuses.PLAYER_ATTACK) {
@@ -317,7 +309,7 @@ class GameLogic @Inject() () extends TGameLogic {
     }
   }
 
-  private[this] def getCountryIndexByString(country: String): Int = world.getCountriesList.indexWhere { x => x._1.toUpperCase().equals(country.toUpperCase()) }
+  private[this] def getCountryIndexByString(country: String): Int = world.getCountriesList.indexWhere { x => x._1.toUpperCase() == country.toUpperCase() }
 
   def dragTroops(countryFrom: String, countryTo: String, troops: Int) : Unit = {
     if (this.status == Statuses.PLAYER_MOVE_TROOPS) {
@@ -329,7 +321,7 @@ class GameLogic @Inject() () extends TGameLogic {
         this.clearAttack()
         this.setErrorStatus(Statuses.COUNTRY_NOT_FOUND)
       } else {
-        if (!this.getNeighbours(countryFrom).map { x => x.getName.toUpperCase() }.contains(countryTo)) {
+        if (!this.getNeighbours(countryFrom).map { x => x._1.toUpperCase() }.contains(countryTo)) {
           this.setErrorStatus(Statuses.NOT_A_NEIGHBORING_COUNTRY)
         } else {
           this.moveTroops(troops)
@@ -340,8 +332,8 @@ class GameLogic @Inject() () extends TGameLogic {
   }
 
   // Function to attack a country. TCountry is the trait type!
-  def rollDice(attacker: (String, String, Int, Int, ArrayBuffer[String]),
-               defender: (String, String, Int, Int, ArrayBuffer[String])): (List[Int], List[Int]) = {
+  def rollDice(attacker: (String, String, Int, Int, List[String]),
+               defender: (String, String, Int, Int, List[String])): (List[Int], List[Int]) = {
     val troopsAttacker = attacker._3
     val toopsDefender = defender._3
     var dicesAttacker: List[Int] = Nil
@@ -516,10 +508,19 @@ private[impl] class ModelHttp(val ip: String, val port: Int) {
       case _ => ""
     }, Duration.Inf).toString.drop("FullfiledFuture(".length).dropRight(1)
     val map = JSON.parseFull(result).get.asInstanceOf[Map[String, Any]]
-    (map("name").asInstanceOf[String], map("troops").asInstanceOf[Int])
+    (map("name").asInstanceOf[String], map("troops").asInstanceOf[Double].toInt)
   }
 
-  def toXml: Elem = ???
+  def toXml: Elem = {
+    val responseFuture: Future[HttpResponse] = call("toxml")
+    val result = Await.result(responseFuture.map {
+      case HttpResponse(StatusCodes.OK, _, entity, _) =>
+        Unmarshal(entity).to[String]
+      case _ => ""
+    }, Duration.Inf).toString.drop("FullfiledFuture(".length).dropRight(1)
+    val map = JSON.parseFull(result).get.asInstanceOf[Map[String, String]]
+    scala.xml.XML.load(new java.io.InputStreamReader(new java.io.ByteArrayInputStream(map("xml").toCharArray.map(_.toByte)), "UTF-8"))
+  }
 
   def getCurrentPlayerIndex: Int = {
     val responseFuture: Future[HttpResponse] = call("currentplayerindex")
@@ -528,11 +529,11 @@ private[impl] class ModelHttp(val ip: String, val port: Int) {
         Unmarshal(entity).to[String]
       case _ => ""
     }, Duration.Inf).toString.drop("FullfiledFuture(".length).dropRight(1)
-    val map = JSON.parseFull(result).get.asInstanceOf[Map[String, Int]]
-    map("index")
+    val map = JSON.parseFull(result).get.asInstanceOf[Map[String, Double]]
+    map("index").toInt
   }
 
-  def getCountriesList: ArrayBuffer[(String, String, Int, Int, ArrayBuffer[String])] = {
+  def getCountriesList: List[(String, String, Int, Int, List[String])] = {
     val responseFuture: Future[HttpResponse] = call("countrieslist")
     val result = Await.result(responseFuture.map {
       case HttpResponse(StatusCodes.OK, _, entity, _) =>
@@ -542,18 +543,21 @@ private[impl] class ModelHttp(val ip: String, val port: Int) {
     val map = JSON.parseFull(result).get.asInstanceOf[Map[String, Map[String, Any]]]
     map.map(c => (
       c._1, c._2("owner").asInstanceOf[String],
-      c._2("troops").asInstanceOf[Int],
-      c._2("color").asInstanceOf[Int],
-      c._2("neighbours").asInstanceOf[ArrayBuffer[String]]
-    )).asInstanceOf[ArrayBuffer[(String, String, Int, Int, ArrayBuffer[String])]]
+      c._2("troops").asInstanceOf[Double].toInt,
+      c._2("color").asInstanceOf[Double].toInt,
+      c._2("neighbours").asInstanceOf[List[String]]
+    )).asInstanceOf[List[(String, String, Int, Int, List[String])]]
   }
 
-  // TODO: implement new functions in model
   def setOwner(country: String, player: String): Unit  = {
-
+    val responseFuture: Future[HttpResponse] = call("setowner",
+      HttpMethods.POST, FormData(("country", country), ("player", player)).toEntity)
+    Await.result(responseFuture, Duration.Inf)
   }
   def setTroops(country: String, troops: Int): Unit  = {
-
+    val responseFuture: Future[HttpResponse] = call("settroops",
+      HttpMethods.POST, FormData(("country", country), ("troops", troops.toString)).toEntity)
+    Await.result(responseFuture, Duration.Inf)
   }
 
   def addPlayer(name: String, color: String): Unit = {
@@ -584,21 +588,22 @@ private[impl] class ModelHttp(val ip: String, val port: Int) {
     map("players").map(p => (p("name").toString, p("troops").asInstanceOf[Double].intValue(), p("color").toString))
   }
 
-  // TODO: implement new function in model
   def setPlayerTroops(player: String, troops: Int): Unit = {
-
+    val responseFuture: Future[HttpResponse] = call("setplayertroops",
+      HttpMethods.POST, FormData(("player", player), ("troops", troops.toString)).toEntity)
+    Await.result(responseFuture, Duration.Inf)
   }
 
   def fromXml(node: Node): Unit = ???
 
-  def getContinentList: List[(String, Int, ArrayBuffer[String])] = {
-    val responseFuture: Future[HttpResponse] = call("playerlist")
+  def getContinentList: List[(String, Int, List[String])] = {
+    val responseFuture: Future[HttpResponse] = call("continentlist")
     val result = Await.result(responseFuture.map {
       case HttpResponse(StatusCodes.OK, _, entity, _) =>
         Unmarshal(entity).to[String]
       case _ => ""
     }, Duration.Inf).toString.drop("FullfiledFuture(".length).dropRight(1)
     val map = JSON.parseFull(result).get.asInstanceOf[List[Map[String, Any]]]
-    map.map(c => (c("owner").toString, c("btroops").asInstanceOf[Double].intValue(), c("countries").asInstanceOf[ArrayBuffer[String]]))
+    map.map(c => (c("owner").toString, c("btroops").asInstanceOf[Double].intValue(), c("countries").asInstanceOf[List[String]]))
   }
 }

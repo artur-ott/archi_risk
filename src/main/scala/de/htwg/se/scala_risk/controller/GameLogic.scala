@@ -5,7 +5,7 @@ import de.htwg.se.scala_risk.util.Statuses
 import de.htwg.se.scala_risk.model.Country
 
 trait GameLogic extends Obserable with PlayerController with CountryController {
-  def getCountries: scala.collection.mutable.ArrayBuffer[(String, String, Int, Int)]
+  def getCountries: List[(String, String, Int, Int)]
   def startGame
   def initializeGame
   def getStatus: Statuses.Value
