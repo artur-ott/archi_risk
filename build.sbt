@@ -17,6 +17,9 @@ libraryDependencies += "org.scala-lang.modules" %% "scala-xml" % "1.0.6"
 libraryDependencies += "org.scala-lang.modules" %% "scala-parser-combinators" % "1.0.4"
 libraryDependencies += "log4j" % "log4j" % "1.2.17"
 
+// Database
+libraryDependencies += "org.mongodb.scala" %% "mongo-scala-driver" % "2.3.0"
+
 // import com.github.retronym.SbtOneJar._
 
 // oneJarSettings

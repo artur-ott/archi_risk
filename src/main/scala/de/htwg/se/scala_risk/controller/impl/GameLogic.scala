@@ -45,6 +45,9 @@ class GameLogic @Inject() (world: World) extends TGameLogic {
     } else {
       this.setErrorStatus(Statuses.NOT_ENOUGH_PLAYERS)
     }
+
+    saveGame // create db entry
+
   }
 
   def logic() : Unit = {
@@ -385,17 +388,26 @@ class GameLogic @Inject() (world: World) extends TGameLogic {
   }
 
   def saveGame : Unit = {
+    /*
     val file: File = new File("./save/savegame.xml")
     val fos: FileOutputStream = new FileOutputStream(file, false)
     val saveXML: Array[Byte] = this.toXml.toString().getBytes
     fos.write(saveXML)
     fos.close()
+    */
+
+    world.saveToMongo(this.toXml.toString())
   }
 
   def loadGame : Unit = {
+    /*
     val filename = "./save/savegame.xml"
     //this.fromXml(scala.xml.XML.loadFile(filename))
     this.fromXml(scala.xml.XML.load(new java.io.InputStreamReader(new java.io.FileInputStream(filename), "UTF-8")))
+    */
+
+    this.fromXml(scala.xml.XML.load(world.loadFromMongo(0)))
+
   }
 
   def toXml: scala.xml.Node = {

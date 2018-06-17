@@ -8,6 +8,7 @@ import de.htwg.se.scala_risk.model.impl.{ Player => ImpPlayer }
 import de.htwg.se.scala_risk.model.impl.{ Country => ImpCountry }
 import de.htwg.se.scala_risk.util.XML
 import scala.collection.mutable.ArrayBuffer
+import de.htwg.se.scala_risk.model.database._
 
 /**
  * This object represents the whole world of ScalaRisk.
@@ -18,6 +19,7 @@ class World extends TWorld {
    * This object holds all the countries of ScalaRisk.
    * @author Nico Lutz
    */
+
   class Countries(world: TWorld) {
     /* NORDAMERIKA */
     var alaska = Country("ALASKA", world, color = -3993841)
@@ -403,6 +405,14 @@ class World extends TWorld {
     val world = (node \ "world")(0)
     this.players.fromXml((world \ "players")(0))
     this.countries.fromXml((world \ "countries")(0))
+  }
+
+  override def saveToMongo(s: String): Unit = {
+    mongo.saveToMongoDB(s)
+  }
+
+  override def loadFromMongo(id: Int): String = {
+    mongo.loadFromMongoDB(id)
   }
 
 }

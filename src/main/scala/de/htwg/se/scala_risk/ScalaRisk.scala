@@ -15,14 +15,14 @@ object ScalaRisk {
 
     val injector = Guice.createInjector(RiskInjector)
 
-    val tui : TUI = injector.instance[TUI]
-    val gui : WelcomeScreen = injector.instance[WelcomeScreen]
+    //val tui : TUI = injector.instance[TUI]
+    //val gui : WelcomeScreen = injector.instance[WelcomeScreen]
 
-   // val worldFactory = new WorldFactory()
-   // val world = worldFactory.getWorld()
-  //  val gameLogic = new ImplGameLogic(world)
-   // val tui : TUI = new TUI(gameLogic)
-    //val gui : WelcomeScreen = new WelcomeScreen(gameLogic)
+   val worldFactory = new WorldFactory()
+    val world = worldFactory.getWorld()
+   val gameLogic = new ImplGameLogic(world)
+   val tui : TUI = new TUI(gameLogic)
+    val gui : WelcomeScreen = new WelcomeScreen(gameLogic)
 
     gui.setLocationRelativeTo(null)
     gui.setVisible(true)

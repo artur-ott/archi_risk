@@ -18,4 +18,7 @@ trait World {
   def toXml: scala.xml.Elem
   def fromXml(node: scala.xml.Node)
 
+  def saveToMongo(s: String)
+  def loadFromMongo(id: Int) : String
+
 }
