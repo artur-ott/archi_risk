@@ -1,12 +1,15 @@
 package de.htwg.se.scala_risk.model.impl
+import javax.inject.Singleton
+
 import de.htwg.se.scala_risk.model.impl.Colors._
-import de.htwg.se.scala_risk.model.{ Player => TPlayer }
-import de.htwg.se.scala_risk.model.{ Country => TCountry }
-import de.htwg.se.scala_risk.model.{ Continent => TContinent }
-import de.htwg.se.scala_risk.model.{ World => TWorld }
-import de.htwg.se.scala_risk.model.impl.{ Player => ImpPlayer }
-import de.htwg.se.scala_risk.model.impl.{ Country => ImpCountry }
+import de.htwg.se.scala_risk.model.{Player => TPlayer}
+import de.htwg.se.scala_risk.model.{Country => TCountry}
+import de.htwg.se.scala_risk.model.{Continent => TContinent}
+import de.htwg.se.scala_risk.model.{World => TWorld}
+import de.htwg.se.scala_risk.model.impl.{Player => ImpPlayer}
+import de.htwg.se.scala_risk.model.impl.{Country => ImpCountry}
 import de.htwg.se.scala_risk.util.XML
+
 import scala.collection.mutable.ArrayBuffer
 import de.htwg.se.scala_risk.model.database._
 
@@ -14,6 +17,7 @@ import de.htwg.se.scala_risk.model.database._
  * This object represents the whole world of ScalaRisk.
  * @author Nico Lutz
  */
+@Singleton
 class World extends TWorld {
   /**
    * This object holds all the countries of ScalaRisk.
@@ -407,12 +411,12 @@ class World extends TWorld {
     this.countries.fromXml((world \ "countries")(0))
   }
 
-  override def saveToMongo(s: String): Unit = {
-    mongo.saveToMongoDB(s)
+  override def saveToMongo(id: Int, s: String): Unit = {
+    mongo.saveToMongoDB(id, s)
   }
 
-  override def loadFromMongo(id: Int): String = {
-    mongo.loadFromMongoDB(id)
+  override def loadFromMongo(): String = {
+    mongo.loadFromMongoDB()
   }
 
 }

@@ -1,62 +1,33 @@
 package de.htwg.se.scala_risk.model.database
 
+import javax.inject.Singleton
+
+@Singleton
 object mongo {
   import org.mongodb.scala.{MongoClient, MongoDatabase}
   import org.mongodb.scala.{MongoCollection, Document}
   import scala.concurrent.Await
   import scala.concurrent.duration.Duration
+  import org.mongodb.scala._
+  import org.mongodb.scala.model.Sorts._
+
   private[this] val mongoClient: MongoClient = MongoClient("mongodb://127.0.0.1")
   private[model] implicit val MONGO_DB: MongoDatabase = mongoClient.getDatabase("archi")
-
   private implicit val GAME: MongoCollection[Document] = MONGO_DB.getCollection("game")
 
-  var id = -1
-  var break = false
+  def saveToMongoDB(id: Int, s: String) = {
 
-  def saveToMongoDB(s: String) = {
-
-    print(id + "before")
-    if (id == -1) {
-      while (!break) {
-        id += 1
-        if (Await.result(GAME.count(Document(
-          "id" -> id
-        )).toFuture, Duration.Inf).asInstanceOf[Int] == 0) {
-          Await.result(GAME.insertOne(Document(
-            "id" -> id,
-            "data" -> ""
-          )).toFuture, Duration.Inf)
-          break = true
-        }
-      }
-    }
-
-    Await.result(GAME.updateOne(
-      Document(
-        "id" -> id
-      ),
-      Document(
-        "$set" -> Document(
-          "id" -> id,
-          "data" -> s
-        )
-      )
-    ).toFuture, Duration.Inf)
-    id+=1
-    print(id + "after")
-  }
-
-  def bar(s: String) = {
-
-    Await.result(GAME.find(Document(
+    Await.result(GAME.insertOne(Document(
+      "id" -> id,
       "data" -> s
     )).toFuture, Duration.Inf)
-
   }
 
-  def loadFromMongoDB(id: Int) : String = {
+  // Always load the latest data from db
+  def loadFromMongoDB() : String = {
 
-    Await.result(GAME.find().collect().toFuture(), Duration.Inf).toString()
+    val res = Await.result(GAME.find().sort(descending("id")).first().toFuture(), Duration.Inf)
+    res.get("data").get.asString().getValue
 
   }
 

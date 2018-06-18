@@ -21,6 +21,8 @@ class GameLogic @Inject() (world: World) extends TGameLogic {
   private[impl] var attackerDefenderIndex: (Int, Int) = (-1, -1)
   private[impl] var rolledDieces: (List[Int], List[Int]) = (Nil, Nil)
   private var lastState: scala.xml.Node = _
+
+  private var db_id = 0;
   //private[this] val world: World = new de.htwg.se.scala_risk.model.impl.World // Changed to test GUI
 
   def startGame : Unit ={
@@ -46,7 +48,7 @@ class GameLogic @Inject() (world: World) extends TGameLogic {
       this.setErrorStatus(Statuses.NOT_ENOUGH_PLAYERS)
     }
 
-    saveGame // create db entry
+    //saveGame // create db entry
 
   }
 
@@ -388,25 +390,22 @@ class GameLogic @Inject() (world: World) extends TGameLogic {
   }
 
   def saveGame : Unit = {
-    /*
-    val file: File = new File("./save/savegame.xml")
-    val fos: FileOutputStream = new FileOutputStream(file, false)
-    val saveXML: Array[Byte] = this.toXml.toString().getBytes
-    fos.write(saveXML)
-    fos.close()
-    */
-
-    world.saveToMongo(this.toXml.toString())
+    world.saveToMongo(db_id, toXml.toString())
+    db_id += 1
   }
 
   def loadGame : Unit = {
-    /*
-    val filename = "./save/savegame.xml"
-    //this.fromXml(scala.xml.XML.loadFile(filename))
-    this.fromXml(scala.xml.XML.load(new java.io.InputStreamReader(new java.io.FileInputStream(filename), "UTF-8")))
-    */
 
-    this.fromXml(scala.xml.XML.load(world.loadFromMongo(0)))
+    // store world status in xml file which you get from db
+    val file: File = new File("./save/savegame.xml")
+    val fos: FileOutputStream = new FileOutputStream(file, false)
+    val saveXML: Array[Byte] = world.loadFromMongo().getBytes
+    fos.write(saveXML)
+    fos.close()
+
+    // load from xml file
+    val filename = "./save/savegame.xml"
+    this.fromXml(scala.xml.XML.load(new java.io.InputStreamReader(new java.io.FileInputStream(filename), "UTF-8")))
 
   }
 
