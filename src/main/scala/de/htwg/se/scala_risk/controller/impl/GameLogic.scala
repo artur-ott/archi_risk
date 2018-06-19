@@ -8,12 +8,9 @@ import java.io.File
 import java.io.FileOutputStream
 import javax.inject.Inject
 import javax.inject.Singleton
-
+import slick.jdbc.H2Profile.api._
 import scala.concurrent.{Await, Future}
-import de.htwg.se.scala_risk.model.database._
-import slick.jdbc.PostgresProfile.api._
-
-import scala.concurrent.duration.Duration
+import scala.concurrent.duration._
 
 @Singleton
 class GameLogic @Inject() (world: World) extends TGameLogic {
@@ -24,50 +21,27 @@ class GameLogic @Inject() (world: World) extends TGameLogic {
   private[impl] var attackerDefenderIndex: (Int, Int) = (-1, -1)
   private[impl] var rolledDieces: (List[Int], List[Int]) = (Nil, Nil)
   private var lastState: scala.xml.Node = _
+  private var db_id = 0;
   //private[this] val world: World = new de.htwg.se.scala_risk.model.impl.World // Changed to test GUI
 
-  private val DATABASE: Database = Database.forConfig("database")
-  DATABASE.createSession()
+  final case class WorldDAO(id: Int, content: String)
 
-  var tables = List(
-    TableQuery[ContinentDAO],
-    TableQuery[CountryDAO],
-    TableQuery[PlayerDAO]
-  )
+  final class WorldTable(tag: Tag) extends Table[WorldDAO](tag, "worldDAO") {
+    def id = column[Int]("id", O.PrimaryKey, O.AutoInc)
+    def content = column[String]("content")
+    def * = (id, content).mapTo[WorldDAO] }
 
-  val tablePlayer = TableQuery[PlayerDAO]
-  val tableCountry = TableQuery[CountryDAO]
-  val tableContinent = TableQuery[ContinentDAO]
-  val tableWorld = TableQuery[WorldDAO]
-  val tableNeighbor = TableQuery[NeighborDAO]
+  var table =  TableQuery[WorldTable]
 
+  val db = Database.forConfig("database")
 
   def startGame : Unit ={
     this.setStatus(Statuses.INITIALIZE_PLAYERS)
 
-    val action1: DBIO[Unit] = tableWorld.schema.create
-    val action2: DBIO[Unit] = tablePlayer.schema.create
-    val action3: DBIO[Unit] = tableContinent.schema.create
-    val action4: DBIO[Unit] = tableCountry.schema.create
-    val action5: DBIO[Unit] = tableNeighbor.schema.create
-
-    val future1: Future[Unit] = DATABASE.run(action1)
-    val future2: Future[Unit] = DATABASE.run(action2)
-    val future3: Future[Unit] = DATABASE.run(action3)
-    val future4: Future[Unit] = DATABASE.run(action4)
-    val future5: Future[Unit] = DATABASE.run(action5)
-
-    val result1 = Await.result(future1, Duration.fromNanos(2000000000))
-    val result2 = Await.result(future2, Duration.fromNanos(2000000000))
-    val result3 = Await.result(future3, Duration.fromNanos(2000000000))
-    val result4 = Await.result(future4, Duration.fromNanos(2000000000))
-    val result5 = Await.result(future5, Duration.fromNanos(2000000000))
-
-    println(result1);
-    println(result2);
-    println(result3);
-    println(result4);
-    println(result5);
+    // Create table schema
+    val action: DBIO[Unit] = table.schema.create
+    val future: Future[Unit] = db.run(action)
+    val result = Await.result(future, 2.seconds)
 
   }
 
@@ -428,18 +402,38 @@ class GameLogic @Inject() (world: World) extends TGameLogic {
     continentName
   }
 
+  def freshData(id: Int) = Seq(
+    WorldDAO(id, this.toXml.toString())
+  )
+
   def saveGame : Unit = {
-    val file: File = new File("./save/savegame.xml")
-    val fos: FileOutputStream = new FileOutputStream(file, false)
-    val saveXML: Array[Byte] = this.toXml.toString().getBytes
-    fos.write(saveXML)
-    fos.close()
+
+    val insert: DBIO[Option[Int]] = table ++= freshData(db_id)
+    val result: Future[Option[Int]] = db.run(insert)
+    val rowCount = Await.result(result, 2.seconds)
+
   }
 
+
+
   def loadGame : Unit = {
+
+    val selectLastGame = table.sortBy(_.id.desc).take(1).result
+    val selectLastGameFuture: Future[Seq[WorldDAO]] = db.run(selectLastGame)
+    val Result = Await.result(selectLastGameFuture, 2.seconds)
+
+    // store world status in xml file which you get from db
+    val file: File = new File("./save/savegame.xml")
+    val fos: FileOutputStream = new FileOutputStream(file, false)
+    val saveXML: Array[Byte] = Result.head.content.toString.getBytes
+    fos.write(saveXML)
+    fos.close()
+
+    // load from xml file
     val filename = "./save/savegame.xml"
-    //this.fromXml(scala.xml.XML.loadFile(filename))
     this.fromXml(scala.xml.XML.load(new java.io.InputStreamReader(new java.io.FileInputStream(filename), "UTF-8")))
+
+
   }
 
   def toXml: scala.xml.Node = {
