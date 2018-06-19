@@ -8,7 +8,10 @@ import java.io.File
 import java.io.FileOutputStream
 import javax.inject.Inject
 import javax.inject.Singleton
+
+import de.htwg.se.scala_risk.model.database.{WorldDAO, WorldTable}
 import slick.jdbc.H2Profile.api._
+
 import scala.concurrent.{Await, Future}
 import scala.concurrent.duration._
 
@@ -24,12 +27,7 @@ class GameLogic @Inject() (world: World) extends TGameLogic {
   private var db_id = 0;
   //private[this] val world: World = new de.htwg.se.scala_risk.model.impl.World // Changed to test GUI
 
-  final case class WorldDAO(id: Int, content: String)
 
-  final class WorldTable(tag: Tag) extends Table[WorldDAO](tag, "worldDAO") {
-    def id = column[Int]("id", O.PrimaryKey, O.AutoInc)
-    def content = column[String]("content")
-    def * = (id, content).mapTo[WorldDAO] }
 
   var table =  TableQuery[WorldTable]
 
