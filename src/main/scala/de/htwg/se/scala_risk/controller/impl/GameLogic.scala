@@ -2,20 +2,32 @@ package de.htwg.se.scala_risk.controller.impl
 
 import de.htwg.se.scala_risk.util.Statuses
 import de.htwg.se.scala_risk.controller.{GameLogic => TGameLogic}
-import de.htwg.se.scala_risk.model._
 import de.htwg.se.scala_risk.util.XML
 import de.htwg.se.scala_risk.controller.actors.WinActor
 import de.htwg.se.scala_risk.controller.actors.Win
 import java.io.File
 import java.io.FileOutputStream
+
+import akka.http.scaladsl.model._
+import akka.http.scaladsl.Http
+import akka.http.scaladsl.unmarshalling.Unmarshal
+import akka.stream.ActorMaterializer
 import javax.inject
 import javax.inject.Inject
 import javax.inject.Singleton
 import akka.actor.{ActorSystem, Props}
 import scala.io.Source
 
+import scala.concurrent.{Await, Future}
+import scala.concurrent.duration.Duration
+import scala.xml.{Elem, Node}
+
 @Singleton
-class GameLogic @Inject() (world: World) extends TGameLogic with Win {
+class GameLogic @Inject() () extends TGameLogic with Win {
+  private val MODEL_PORT = 8081
+  private val MODEL_IP = "localhost"
+
+  val world = new ModelHttp(MODEL_IP, MODEL_PORT)
 
   private[this] var status: Statuses.Value = Statuses.CREATE_GAME
   private[this] val INIT_TROOPS: Int = 3
@@ -39,8 +51,8 @@ class GameLogic @Inject() (world: World) extends TGameLogic with Win {
 
       countries.foreach { x =>
         {
-          x.setTroops(INIT_TROOPS)
-          x.setOwner(players(countries.indexOf(x) % players.length))
+          world.setTroops(x._1, INIT_TROOPS)
+          world.setOwner(x._1, players(countries.indexOf(x) % players.length)._1)
         }
       }
 
@@ -56,7 +68,7 @@ class GameLogic @Inject() (world: World) extends TGameLogic with Win {
     this.status match {
       case Statuses.GAME_INITIALIZED =>
         checkContinents()
-        this.troopsToSpread = world.getPlayerList(world.getCurrentPlayerIndex).getTroops()
+        this.troopsToSpread = world.getPlayerList(world.getCurrentPlayerIndex)._2
         this.setStatus(Statuses.PLAYER_SPREAD_TROOPS)
       case Statuses.PLAYER_SPREAD_TROOPS => this.setStatus(Statuses.PLAYER_ATTACK)
       case Statuses.PLAYER_ATTACK => this.setStatus(Statuses.PLAYER_MOVE_TROOPS)
@@ -71,7 +83,7 @@ class GameLogic @Inject() (world: World) extends TGameLogic with Win {
         //          this.setStatus(Statuses.PLAYER_SPREAD_TROOPS)
         //        }
         checkContinents()
-        this.troopsToSpread = nextPlayer.getTroops()
+        this.troopsToSpread = nextPlayer._2
         this.setStatus(Statuses.PLAYER_SPREAD_TROOPS)
       }
       case _ =>
@@ -113,22 +125,22 @@ class GameLogic @Inject() (world: World) extends TGameLogic with Win {
   def getRolledDieces: (List[Int], List[Int]) = this.rolledDieces
 
   /* Country operations */
-  def getCountries: scala.collection.mutable.ArrayBuffer[(String, String, Int, Int)] =
-    world.getCountriesList.map { x => (x.getName, x.getOwner.getName, x.getTroops, x.getRefColor()) }
+  def getCountries: List[(String, String, Int, Int)] =
+    world.getCountriesList.map { x => (x._1, x._2, x._3, x._4) }
 
   def getCandidates(country: String = ""): List[(String, String, Int)] = {
     this.status match {
       case Statuses.PLAYER_SPREAD_TROOPS => {
-        val list = world.getCountriesList.filter { x => x.getOwner.equals(world.getPlayerList(world.getCurrentPlayerIndex)) }
-        list.map { x => (x.getName, x.getOwner.getName, x.getTroops) }.toList
+        val list = world.getCountriesList.filter { x => x._2.equals(world.getPlayerList(world.getCurrentPlayerIndex)._1) }
+        list.map { x => (x._1, x._2, x._3) }.toList
       }
       case Statuses.PLAYER_ATTACK => {
-        val candidates = getNeighbours(country).filterNot { x => x.getOwner.equals(world.getPlayerList(world.getCurrentPlayerIndex)) }
-        candidates.map { x => (x.getName, x.getOwner.getName, x.getTroops) }
+        val candidates = getNeighbours(country).filterNot(x => x._2.equals(world.getPlayerList(world.getCurrentPlayerIndex)._1))
+        candidates.map { x => (x._1, x._2, x._3) }
       }
       case Statuses.PLAYER_MOVE_TROOPS => {
-        val candidates = getNeighbours(country).filter { x => x.getOwner.equals(world.getPlayerList(world.getCurrentPlayerIndex)) }
-        candidates.map { x => (x.getName, x.getOwner.getName, x.getTroops) }
+        val candidates = getNeighbours(country).filter { x => x._2.equals(world.getPlayerList(world.getCurrentPlayerIndex)._1) }
+        candidates.map { x => (x._1, x._2, x._3) }
       }
       case _ => Nil
     }
@@ -144,14 +156,15 @@ class GameLogic @Inject() (world: World) extends TGameLogic with Win {
   }
 
   private def getCountryAsString(index: Int): (String, String, Int, Int) = {
-    val country: Country = world.getCountriesList(index)
-    (country.getName, country.getOwner.getName, country.getTroops, country.getRefColor())
+    val country = world.getCountriesList(index)
+    (country._1, country._2, country._3, country._4)
   }
 
-  private def getNeighbours(country: String): List[Country] = {
+  private def getNeighbours(country: String): List[(String, String, Int, Int, List[String])] = {
     val index = this.getCountryIndexByString(country)
     if (index < 0) this.setErrorStatus(Statuses.COUNTRY_NOT_FOUND)
-    world.getCountriesList(index).getNeighboringCountries.toList
+    val countries = world.getCountriesList
+    countries.filter(c => countries(index)._5.contains(c._1))
   }
 
   def getAttackerDefenderIndex: (Int, Int) = this.attackerDefenderIndex
@@ -159,7 +172,7 @@ class GameLogic @Inject() (world: World) extends TGameLogic with Win {
   /* Player operations */
   var troopsToSpread = 3//world.getPlayerList(world.getCurrentPlayerIndex).getTroops()
 
-  def getAvailableColors: List[String] = world.getPlayerColorList.map { x => x.toString() }
+  def getAvailableColors: List[String] = world.getPlayerColorList
 
   def setPlayer(player: (String, String)) : Unit = {
     world.addPlayer(player._1, player._2)
@@ -167,8 +180,8 @@ class GameLogic @Inject() (world: World) extends TGameLogic with Win {
   }
 
   def getCurrentPlayer: (String, String) = (
-    world.getPlayerList(world.getCurrentPlayerIndex).getName,
-    world.getPlayerList(world.getCurrentPlayerIndex).getColor.toString()
+    world.getPlayerList(world.getCurrentPlayerIndex)._1,
+    world.getPlayerList(world.getCurrentPlayerIndex)._3
   )
 
   def getTroopsToSpread: Int = this.troopsToSpread
@@ -176,11 +189,11 @@ class GameLogic @Inject() (world: World) extends TGameLogic with Win {
   def addTroops(country: String, troops: Int) : Unit = {
     val index = this.getCountryIndexByString(country)
     if (index >= 0) {
-      if (world.getCountriesList(index).getOwner.equals(world.getPlayerList(world.getCurrentPlayerIndex))) {
+      if (world.getCountriesList(index)._2.equals(world.getPlayerList(world.getCurrentPlayerIndex)._1)) {
         if (troops <= troopsToSpread) {
           this.lastState = this.toXml
           val countryList = world.getCountriesList.toList
-          countryList(index).setTroops(countryList(index).getTroops + troops)
+          world.setTroops(countryList(index)._1, countryList(index)._3 + troops)
           troopsToSpread -= troops
           if (troopsToSpread == 0) logic()
           else notifyObservers
@@ -199,7 +212,7 @@ class GameLogic @Inject() (world: World) extends TGameLogic with Win {
       /* Check, if the country to attack is a neighboring country of the
        * attacker country was missing!
        */
-      if (!this.getNeighbours(countryAttacker).map { x => x.getName.toUpperCase() }.contains(countryDefender.toUpperCase())) {
+      if (!this.getNeighbours(countryAttacker).map { x => x._1.toUpperCase() }.contains(countryDefender.toUpperCase())) {
         this.setErrorStatus(Statuses.NOT_A_NEIGHBORING_COUNTRY)
       } else {
         if (this.status == Statuses.PLAYER_ATTACK) {
@@ -212,13 +225,13 @@ class GameLogic @Inject() (world: World) extends TGameLogic with Win {
             )
             this.setStatus(Statuses.DIECES_ROLLED)
             val min = Math.min(this.rolledDieces._1.length, this.rolledDieces._2.length)
-            var extantTroopsAttacker = world.getCountriesList(attackerDefenderIndex._1).getTroops
-            var extantTroopsDefender = world.getCountriesList(attackerDefenderIndex._2).getTroops
+            var extantTroopsAttacker = world.getCountriesList(attackerDefenderIndex._1)._3
+            var extantTroopsDefender = world.getCountriesList(attackerDefenderIndex._2)._3
             val extant = this.getExtantTroops(extantTroopsAttacker, extantTroopsDefender, min)
             extantTroopsAttacker = extant._1
             extantTroopsDefender = extant._2
-            world.getCountriesList(attackerDefenderIndex._1).setTroops(extantTroopsAttacker)
-            world.getCountriesList(attackerDefenderIndex._2).setTroops(extantTroopsDefender)
+            world.setTroops(world.getCountriesList(attackerDefenderIndex._1)._1, extantTroopsAttacker)
+            world.setTroops(world.getCountriesList(attackerDefenderIndex._2)._1, extantTroopsDefender)
             this.checkConquered(extantTroopsDefender, countryDefender)
           }
         }
@@ -241,7 +254,7 @@ class GameLogic @Inject() (world: World) extends TGameLogic with Win {
 
   private[impl] def checkConquered(extantTroopsDefender: Int, countryDefender: String) : Unit = {
     if (extantTroopsDefender == 0) {
-      world.getCountriesList(attackerDefenderIndex._2).setOwner(world.getCountriesList(attackerDefenderIndex._1).getOwner)
+      world.setOwner(world.getCountriesList(attackerDefenderIndex._2)._1, world.getCountriesList(attackerDefenderIndex._1)._2)
 
       if (this.getContinentOwner(countryDefender).toUpperCase().equals(this.getOwnerName(countryDefender).toUpperCase())) {
         this.checkForAWin
@@ -259,13 +272,13 @@ class GameLogic @Inject() (world: World) extends TGameLogic with Win {
     val indexAttacker = this.getCountryIndexByString(countryAttacker)
     val indexDefender = this.getCountryIndexByString(countryDefender)
     if (indexAttacker > -1 && indexDefender > -1) {
-      if (world.getCountriesList(indexAttacker).getOwner.equals(world.getPlayerList(world.getCurrentPlayerIndex)) &&
-        !world.getCountriesList(indexDefender).getOwner.equals(world.getPlayerList(world.getCurrentPlayerIndex))) {
+      if (world.getCountriesList(indexAttacker)._2.equals(world.getPlayerList(world.getCurrentPlayerIndex)._1) &&
+        !world.getCountriesList(indexDefender)._2.equals(world.getPlayerList(world.getCurrentPlayerIndex)._1)) {
         return (indexAttacker, indexDefender)
-      } else if (world.getCountriesList(indexAttacker).getOwner.equals(world.getPlayerList(world.getCurrentPlayerIndex)) &&
-        world.getCountriesList(indexDefender).getOwner.equals(world.getPlayerList(world.getCurrentPlayerIndex))) {
+      } else if (world.getCountriesList(indexAttacker)._2.equals(world.getPlayerList(world.getCurrentPlayerIndex)._1) &&
+        world.getCountriesList(indexDefender)._2.equals(world.getPlayerList(world.getCurrentPlayerIndex)._1)) {
         this.setErrorStatus(Statuses.PLAYER_ATTACKING_HIS_COUNTRY)
-      } else if (!world.getCountriesList(indexAttacker).getOwner.equals(world.getPlayerList(world.getCurrentPlayerIndex))) {
+      } else if (!world.getCountriesList(indexAttacker)._2.equals(world.getPlayerList(world.getCurrentPlayerIndex)._1)) {
         this.setErrorStatus(Statuses.COUNTRY_DOES_NOT_BELONG_TO_PLAYER)
       }
     } else this.setErrorStatus(Statuses.COUNTRY_NOT_FOUND)
@@ -279,25 +292,25 @@ class GameLogic @Inject() (world: World) extends TGameLogic with Win {
 
   def moveTroops(count: Int) : Unit = {
     if (this.status == Statuses.PLAYER_CONQUERED_A_COUNTRY || this.status == Statuses.PLAYER_CONQUERED_A_CONTINENT || this.status == Statuses.PLAYER_MOVE_TROOPS) {
-      val currentTroops = world.getCountriesList(this.attackerDefenderIndex._1).getTroops
+      val currentTroops = world.getCountriesList(this.attackerDefenderIndex._1)._3
       if (count < 1 || count >= currentTroops)
         this.setErrorStatus(Statuses.INVALID_QUANTITY_OF_TROOPS_TO_MOVE)
       else if (this.status == Statuses.PLAYER_CONQUERED_A_COUNTRY || this.status == Statuses.PLAYER_CONQUERED_A_CONTINENT) {
-        world.getCountriesList(this.attackerDefenderIndex._1).setTroops(currentTroops - count)
-        world.getCountriesList(this.attackerDefenderIndex._2).setTroops(count)
+        world.setTroops(world.getCountriesList(this.attackerDefenderIndex._1)._1, currentTroops - count)
+        world.setTroops(world.getCountriesList(this.attackerDefenderIndex._2)._1, count)
         this.clearAttack()
         this.setStatus(Statuses.PLAYER_ATTACK)
       } else {
         this.lastState = this.toXml
-        world.getCountriesList(this.attackerDefenderIndex._1).setTroops(currentTroops - count)
-        world.getCountriesList(this.attackerDefenderIndex._2).setTroops(world.getCountriesList(this.attackerDefenderIndex._2).getTroops + count)
+        world.setTroops(world.getCountriesList(this.attackerDefenderIndex._1)._1, currentTroops - count)
+        world.setTroops(world.getCountriesList(this.attackerDefenderIndex._2)._1, world.getCountriesList(this.attackerDefenderIndex._2)._3 + count)
         this.clearAttack()
         this.setStatus(Statuses.PLAYER_MOVE_TROOPS)
       }
     }
   }
 
-  private[this] def getCountryIndexByString(country: String): Int = world.getCountriesList.indexWhere { x => x.getName.toUpperCase().equals(country.toUpperCase()) }
+  private[this] def getCountryIndexByString(country: String): Int = world.getCountriesList.indexWhere { x => x._1.toUpperCase() == country.toUpperCase() }
 
   def dragTroops(countryFrom: String, countryTo: String, troops: Int) : Unit = {
     if (this.status == Statuses.PLAYER_MOVE_TROOPS) {
@@ -309,7 +322,7 @@ class GameLogic @Inject() (world: World) extends TGameLogic with Win {
         this.clearAttack()
         this.setErrorStatus(Statuses.COUNTRY_NOT_FOUND)
       } else {
-        if (!this.getNeighbours(countryFrom).map { x => x.getName.toUpperCase() }.contains(countryTo)) {
+        if (!this.getNeighbours(countryFrom).map { x => x._1.toUpperCase() }.contains(countryTo)) {
           this.setErrorStatus(Statuses.NOT_A_NEIGHBORING_COUNTRY)
         } else {
           this.moveTroops(troops)
@@ -320,9 +333,10 @@ class GameLogic @Inject() (world: World) extends TGameLogic with Win {
   }
 
   // Function to attack a country. TCountry is the trait type!
-  def rollDice(attacker: Country, defender: Country): (List[Int], List[Int]) = {
-    val troopsAttacker = attacker.getTroops
-    val toopsDefender = defender.getTroops
+  def rollDice(attacker: (String, String, Int, Int, List[String]),
+               defender: (String, String, Int, Int, List[String])): (List[Int], List[Int]) = {
+    val troopsAttacker = attacker._3
+    val toopsDefender = defender._3
     var dicesAttacker: List[Int] = Nil
     var dicesDefender: List[Int] = Nil
     //return (6 :: 6 :: 6 :: Nil, 5 :: 5 :: 5 :: Nil) // TODO: for testing remove comment
@@ -347,14 +361,14 @@ class GameLogic @Inject() (world: World) extends TGameLogic with Win {
   def randomDice(): Int = ((Math.random() * 6) + 1).toInt
 
   def getCurrentPlayerColor(): String = {
-    world.getPlayerList(world.getCurrentPlayerIndex).getColor.toString()
+    world.getPlayerList(world.getCurrentPlayerIndex)._3
   }
 
   def getOwnerColor(owner: String): Int = {
     val playerList = world.getPlayerList
     var intcolor = 0
     var color = ""
-    playerList.foreach { x => if (x.getName.toUpperCase().equals(owner.toUpperCase())) { color = x.getColor.toString().toUpperCase() } }
+    playerList.foreach { x => if (x._1.toUpperCase().equals(owner.toUpperCase())) { color = x._3.toUpperCase() } }
 
     color match {
       case "RED" => intcolor = -57312
@@ -371,7 +385,7 @@ class GameLogic @Inject() (world: World) extends TGameLogic with Win {
   def getOwnerName(country: String): String = {
     val countryList = world.getCountriesList
     var ownerName = ""
-    countryList.foreach { x => if (x.getName.toUpperCase().equals(country.toUpperCase())) { ownerName = x.getOwner.getName.toUpperCase() } }
+    countryList.foreach { x => if (x._1.toUpperCase().equals(country.toUpperCase())) { ownerName = x._2.toUpperCase() } }
     ownerName
   }
 
@@ -379,14 +393,22 @@ class GameLogic @Inject() (world: World) extends TGameLogic with Win {
     val playerList = world.getPlayerList
     val continentList = world.getContinentList
 
-    playerList.foreach { x => x.setTroops(this.INIT_TROOPS); continentList.foreach { c => if (c.getOwner() == x) { x.setTroops(x.getTroops() + c.getBonusTroops()) } } }
+    playerList.foreach { x =>
+      var troops = 0
+      continentList.foreach { c =>
+        if (c._1 == x._1) {
+          troops += c._2
+        }
+      }
+      world.setPlayerTroops(x._1, this.INIT_TROOPS + troops);
+    }
 
   }
   
   def getContinentOwner(countryName: String): String = {
     val continentList = world.getContinentList
     var continentName = ""
-    continentList.foreach { x => if (x.getIncludedCountries().map { y => y.getName }.contains(countryName)) { continentName = x.getOwner().getName } }
+    continentList.foreach { x => if (x._3.contains(countryName)) { continentName = x._1 } }
     continentName
   }
 
@@ -470,5 +492,133 @@ class GameLogic @Inject() (world: World) extends TGameLogic with Win {
       case Some(player) => println("Player %s won!".format(player))
       case None =>
     }
+  }
+}
+
+private[controller] class ModelHttp(val ip: String, val port: Int) {
+  import scala.util.parsing.json.JSON
+  implicit val system = ActorSystem("TUI")
+  implicit val executionContext = system.dispatcher
+  implicit val materializer = ActorMaterializer()
+
+  val modelOnlineTest: Future[HttpResponse] = Http().singleRequest(HttpRequest(uri = "http://%s:%d/status".format(ip, port)))
+  try {
+    Await.result(modelOnlineTest, Duration.Inf)
+  } catch {
+    case _: akka.stream.StreamTcpException => System.err.println("Model microservice not started!")
+  }
+
+  def call(route: String, method: HttpMethod = HttpMethods.GET, entity: RequestEntity = HttpEntity.Empty): Future[HttpResponse] =
+    Http().singleRequest(HttpRequest(method, Uri("http://%s:%d/%s".format(ip, port, route)), Nil, entity))
+
+  def nextPlayer: (String, Int) = {
+    val responseFuture: Future[HttpResponse] = call("nextplayer", HttpMethods.PUT)
+    val result = Await.result(responseFuture.map {
+      case HttpResponse(StatusCodes.OK, _, entity, _) =>
+        Unmarshal(entity).to[String]
+      case _ => ""
+    }, Duration.Inf).toString.drop("FullfiledFuture(".length).dropRight(1)
+    val map = JSON.parseFull(result).get.asInstanceOf[Map[String, Any]]
+    (map("name").asInstanceOf[String], map("troops").asInstanceOf[Double].toInt)
+  }
+
+  def toXml: Elem = {
+    val responseFuture: Future[HttpResponse] = call("toxml")
+    val result = Await.result(responseFuture.map {
+      case HttpResponse(StatusCodes.OK, _, entity, _) =>
+        Unmarshal(entity).to[String]
+      case _ => ""
+    }, Duration.Inf).toString.drop("FullfiledFuture(".length).dropRight(1)
+    val map = JSON.parseFull(result).get.asInstanceOf[Map[String, String]]
+    scala.xml.XML.load(new java.io.InputStreamReader(new java.io.ByteArrayInputStream(map("xml").toCharArray.map(_.toByte)), "UTF-8"))
+  }
+
+  def getCurrentPlayerIndex: Int = {
+    val responseFuture: Future[HttpResponse] = call("currentplayerindex")
+    val result = Await.result(responseFuture.map {
+      case HttpResponse(StatusCodes.OK, _, entity, _) =>
+        Unmarshal(entity).to[String]
+      case _ => ""
+    }, Duration.Inf).toString.drop("FullfiledFuture(".length).dropRight(1)
+    val map = JSON.parseFull(result).get.asInstanceOf[Map[String, Double]]
+    map("index").toInt
+  }
+
+  def getCountriesList: List[(String, String, Int, Int, List[String])] = {
+    val responseFuture: Future[HttpResponse] = call("countrieslist")
+    val result = Await.result(responseFuture.map {
+      case HttpResponse(StatusCodes.OK, _, entity, _) =>
+        Unmarshal(entity).to[String]
+      case _ => ""
+    }, Duration.Inf).toString.drop("FullfiledFuture(".length).dropRight(1)
+    val map = JSON.parseFull(result).get.asInstanceOf[Map[String, Map[String, Any]]]
+    map.map(c => (
+      c._1, c._2("owner").asInstanceOf[String],
+      c._2("troops").asInstanceOf[Double].toInt,
+      c._2("color").asInstanceOf[Double].toInt,
+      c._2("neighbours").asInstanceOf[List[String]]
+    )).asInstanceOf[List[(String, String, Int, Int, List[String])]]
+  }
+
+  def setOwner(country: String, player: String): Unit  = {
+    val responseFuture: Future[HttpResponse] = call("setowner",
+      HttpMethods.POST, FormData(("country", country), ("player", player)).toEntity)
+    Await.result(responseFuture, Duration.Inf)
+  }
+  def setTroops(country: String, troops: Int): Unit  = {
+    val responseFuture: Future[HttpResponse] = call("settroops",
+      HttpMethods.POST, FormData(("country", country), ("troops", troops.toString)).toEntity)
+    Await.result(responseFuture, Duration.Inf)
+  }
+
+  def addPlayer(name: String, color: String): Unit = {
+    val responseFuture: Future[HttpResponse] = call("addplayer",
+      HttpMethods.POST, FormData(("player", name), ("color", color)).toEntity)
+    Await.result(responseFuture, Duration.Inf)
+  }
+
+  def getPlayerColorList: List[String] = {
+    val responseFuture: Future[HttpResponse] = call("playercolorlist")
+    val result = Await.result(responseFuture.map {
+      case HttpResponse(StatusCodes.OK, _, entity, _) =>
+        Unmarshal(entity).to[String]
+      case _ => ""
+    }, Duration.Inf).toString.drop("FullfiledFuture(".length).dropRight(1)
+    val map = JSON.parseFull(result).get.asInstanceOf[Map[String, List[String]]]
+    map("colors")
+  }
+
+  def getPlayerList: List[(String, Int, String)] = {
+    val responseFuture: Future[HttpResponse] = call("playerlist")
+    val result = Await.result(responseFuture.map {
+      case HttpResponse(StatusCodes.OK, _, entity, _) =>
+        Unmarshal(entity).to[String]
+      case _ => ""
+    }, Duration.Inf).toString.drop("FullfiledFuture(".length).dropRight(1)
+    val map = JSON.parseFull(result).get.asInstanceOf[Map[String, List[Map[String, Any]]]]
+    map("players").map(p => (p("name").toString, p("troops").asInstanceOf[Double].intValue(), p("color").toString))
+  }
+
+  def setPlayerTroops(player: String, troops: Int): Unit = {
+    val responseFuture: Future[HttpResponse] = call("setplayertroops",
+      HttpMethods.POST, FormData(("player", player), ("troops", troops.toString)).toEntity)
+    Await.result(responseFuture, Duration.Inf)
+  }
+
+  def fromXml(node: Node): Unit = {
+    val responseFuture: Future[HttpResponse] = call("fromxml",
+      HttpMethods.POST, FormData(("xml", node.toString())).toEntity)
+    Await.result(responseFuture, Duration.Inf)
+  }
+
+  def getContinentList: List[(String, Int, List[String], String)] = {
+    val responseFuture: Future[HttpResponse] = call("continentlist")
+    val result = Await.result(responseFuture.map {
+      case HttpResponse(StatusCodes.OK, _, entity, _) =>
+        Unmarshal(entity).to[String]
+      case _ => ""
+    }, Duration.Inf).toString.drop("FullfiledFuture(".length).dropRight(1)
+    val map = JSON.parseFull(result).get.asInstanceOf[List[Map[String, Any]]]
+    map.map(c => (c("owner").toString, c("btroops").asInstanceOf[Double].intValue(), c("countries").asInstanceOf[List[String]], c("name").toString))
   }
 }

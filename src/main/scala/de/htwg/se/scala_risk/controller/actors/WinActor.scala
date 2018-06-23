@@ -1,7 +1,7 @@
 package de.htwg.se.scala_risk.controller.actors
 
 import akka.actor.{Actor, Props}
-import de.htwg.se.scala_risk.model.World
+import de.htwg.se.scala_risk.controller.impl.ModelHttp
 
 class WinActor extends Actor {
 
@@ -21,10 +21,10 @@ class WinActor extends Actor {
     case _ => println("WinActor")
   }
 
-  def init(win: Win, world: World): Unit = {
+  def init(win: Win, world: ModelHttp): Unit = {
     this.win = win
     world.getContinentList.foreach(continent => {
-      context.actorOf(Props[ContinentActor], continent.getName().replaceAll("[äöüÄÖÜß]", "")) ! ContinentActor.Init(continent)
+      context.actorOf(Props[ContinentActor], continent._4.replaceAll("[äöüÄÖÜß]", "")) ! ContinentActor.Init(continent, world)
     })
   }
 
@@ -43,7 +43,7 @@ class WinActor extends Actor {
 }
 
 object WinActor {
-  case class Init(logic: Win, world: World)
+  case class Init(logic: Win, world: ModelHttp)
   case class OwnedContinent(country: String, player: Option[String])
 }
 
