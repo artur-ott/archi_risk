@@ -5,7 +5,6 @@ import org.scalatest.Matchers._
 import org.scalatest.junit.JUnitRunner
 import org.junit.runner.RunWith
 
-import scala.collection._
 import scala.collection.mutable.ArrayBuffer
 import de.htwg.se.scala_risk.model.{ Country => TCountry }
 import de.htwg.se.scala_risk.model.impl.World
