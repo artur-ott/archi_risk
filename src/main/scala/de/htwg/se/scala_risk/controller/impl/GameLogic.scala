@@ -3,10 +3,11 @@ package de.htwg.se.scala_risk.controller.impl
 import de.htwg.se.scala_risk.util.Statuses
 import de.htwg.se.scala_risk.controller.{GameLogic => TGameLogic}
 import de.htwg.se.scala_risk.util.XML
+import de.htwg.se.scala_risk.controller.actors.WinActor
+import de.htwg.se.scala_risk.controller.actors.Win
 import java.io.File
 import java.io.FileOutputStream
 
-import akka.actor.ActorSystem
 import akka.http.scaladsl.model._
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.unmarshalling.Unmarshal
@@ -14,19 +15,15 @@ import akka.stream.ActorMaterializer
 import javax.inject
 import javax.inject.Inject
 import javax.inject.Singleton
+import akka.actor.{ActorSystem, Props}
+import scala.io.Source
 
 import scala.concurrent.{Await, Future}
 import scala.concurrent.duration.Duration
 import scala.xml.{Elem, Node}
 
-object GameLogic {
-  def main(args: Array[String]): Unit = {
-    new GameLogic
-  }
-}
-
 @Singleton
-class GameLogic @Inject() () extends TGameLogic {
+class GameLogic @Inject() () extends TGameLogic with Win {
   private val MODEL_PORT = 8081
   private val MODEL_IP = "localhost"
 
@@ -38,7 +35,9 @@ class GameLogic @Inject() () extends TGameLogic {
   private[impl] var attackerDefenderIndex: (Int, Int) = (-1, -1)
   private[impl] var rolledDieces: (List[Int], List[Int]) = (Nil, Nil)
   private var lastState: scala.xml.Node = _
-  //private[this] val world: World = new de.htwg.se.scala_risk.model.impl.World // Changed to test GUI
+
+  private[this] val actorSystem: ActorSystem = ActorSystem("WinSystem")
+  private[this] val winActor = this.actorSystem.actorOf(Props[WinActor], "winCounter")
 
   def startGame : Unit ={
     this.setStatus(Statuses.INITIALIZE_PLAYERS)
@@ -56,6 +55,7 @@ class GameLogic @Inject() () extends TGameLogic {
           world.setOwner(x._1, players(countries.indexOf(x) % players.length)._1)
         }
       }
+
       world.nextPlayer
       this.setStatus(Statuses.GAME_INITIALIZED)
       logic()
@@ -257,6 +257,7 @@ class GameLogic @Inject() () extends TGameLogic {
       world.setOwner(world.getCountriesList(attackerDefenderIndex._2)._1, world.getCountriesList(attackerDefenderIndex._1)._2)
 
       if (this.getContinentOwner(countryDefender).toUpperCase().equals(this.getOwnerName(countryDefender).toUpperCase())) {
+        this.checkForAWin
         this.setStatus(Statuses.PLAYER_CONQUERED_A_CONTINENT)
       } else {
         this.setStatus(Statuses.PLAYER_CONQUERED_A_COUNTRY)
@@ -482,9 +483,19 @@ class GameLogic @Inject() () extends TGameLogic {
     }
   }
 
+  private def checkForAWin : Unit = {
+    this.winActor ! WinActor.Init(this, this.world)
+  }
+
+  override def win(player: Option[String]): Unit = {
+    player match {
+      case Some(player) => println("Player %s won!".format(player))
+      case None =>
+    }
+  }
 }
 
-private[impl] class ModelHttp(val ip: String, val port: Int) {
+private[controller] class ModelHttp(val ip: String, val port: Int) {
   import scala.util.parsing.json.JSON
   implicit val system = ActorSystem("TUI")
   implicit val executionContext = system.dispatcher
@@ -594,9 +605,13 @@ private[impl] class ModelHttp(val ip: String, val port: Int) {
     Await.result(responseFuture, Duration.Inf)
   }
 
-  def fromXml(node: Node): Unit = ???
+  def fromXml(node: Node): Unit = {
+    val responseFuture: Future[HttpResponse] = call("fromxml",
+      HttpMethods.POST, FormData(("xml", node.toString())).toEntity)
+    Await.result(responseFuture, Duration.Inf)
+  }
 
-  def getContinentList: List[(String, Int, List[String])] = {
+  def getContinentList: List[(String, Int, List[String], String)] = {
     val responseFuture: Future[HttpResponse] = call("continentlist")
     val result = Await.result(responseFuture.map {
       case HttpResponse(StatusCodes.OK, _, entity, _) =>
@@ -604,6 +619,6 @@ private[impl] class ModelHttp(val ip: String, val port: Int) {
       case _ => ""
     }, Duration.Inf).toString.drop("FullfiledFuture(".length).dropRight(1)
     val map = JSON.parseFull(result).get.asInstanceOf[List[Map[String, Any]]]
-    map.map(c => (c("owner").toString, c("btroops").asInstanceOf[Double].intValue(), c("countries").asInstanceOf[List[String]]))
+    map.map(c => (c("owner").toString, c("btroops").asInstanceOf[Double].intValue(), c("countries").asInstanceOf[List[String]], c("name").toString))
   }
 }

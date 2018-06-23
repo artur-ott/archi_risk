@@ -11,10 +11,10 @@ import de.htwg.se.scala_risk.model.impl.World
 import de.htwg.se.scala_risk.model.impl.Country
 import de.htwg.se.scala_risk.util.Statuses
 
-/*@RunWith(classOf[JUnitRunner])
+@RunWith(classOf[JUnitRunner])
 class GameLogicSpec extends WordSpec {
   val world: World = new World
-  val gameLogic: GameLogic = new GameLogic(world)
+  val gameLogic: GameLogic = new GameLogic()
 
   "A country owner " should {
     "be the same" in {
@@ -81,7 +81,7 @@ class GameLogicSpec extends WordSpec {
 
   "Rolled dieces" should {
     "be a tuple as a list" in {
-      gameLogic.rolledDieces = gameLogic.rollDice(new Country(null, world, troops = 3), new Country(null, world, troops = 3))
+      gameLogic.rolledDieces = gameLogic.rollDice(("", "", 3, 12, List[String]("")), ("", "", 3, 12, List[String]("")))
       gameLogic.getRolledDieces._1 should not be empty
       gameLogic.getRolledDieces._2 should not be empty
     }
@@ -302,22 +302,33 @@ class GameLogicSpec extends WordSpec {
   "Rolled dices" should {
     "be (nil, nil) on troops are < 2" in {
       world.getCountriesList(0).setTroops(1)
-      gameLogic.rollDice(world.getCountriesList(0), world.getCountriesList(0)) should be((Nil, Nil))
+      val country = world.getCountriesList(0)
+      gameLogic.rollDice((country.getName, country.getOwner.getName, country.getTroops, country.getRefColor(), country.getNeighboringCountries.map(c => c.getName).asInstanceOf[List[String]]),
+        (country.getName, country.getOwner.getName, country.getTroops, country.getRefColor(), country.getNeighboringCountries.map(c => c.getName).asInstanceOf[List[String]])) should be((Nil, Nil))
     }
     "not be (nil, nil) on attaker troops = 2, defender troops = 1" in {
       world.getCountriesList(0).setTroops(2)
       world.getCountriesList(1).setTroops(1)
-      gameLogic.rollDice(world.getCountriesList(0), world.getCountriesList(1)) should not be ((Nil, Nil))
+      val country = world.getCountriesList(0)
+      val country1 = world.getCountriesList(1)
+      gameLogic.rollDice((country.getName, country.getOwner.getName, country.getTroops, country.getRefColor(), country.getNeighboringCountries.map(c => c.getName).asInstanceOf[List[String]]),
+        (country1.getName, country1.getOwner.getName, country1.getTroops, country1.getRefColor(), country1.getNeighboringCountries.map(c => c.getName).asInstanceOf[List[String]])) should not be ((Nil, Nil))
     }
     "not be (nil, nil) on attaker troops = 3, defender troops = 2" in {
       world.getCountriesList(0).setTroops(3)
       world.getCountriesList(1).setTroops(2)
-      gameLogic.rollDice(world.getCountriesList(0), world.getCountriesList(1)) should not be ((Nil, Nil))
+      val country = world.getCountriesList(0)
+      val country1 = world.getCountriesList(1)
+      gameLogic.rollDice((country.getName, country.getOwner.getName, country.getTroops, country.getRefColor(), country.getNeighboringCountries.map(c => c.getName).asInstanceOf[List[String]]),
+        (country1.getName, country1.getOwner.getName, country1.getTroops, country1.getRefColor(), country1.getNeighboringCountries.map(c => c.getName).asInstanceOf[List[String]])) should not be ((Nil, Nil))
     }
     "not be (nil, nil) on attaker troops > 3, defender troops = 2" in {
       world.getCountriesList(0).setTroops(4)
       world.getCountriesList(1).setTroops(2)
-      gameLogic.rollDice(world.getCountriesList(0), world.getCountriesList(1)) should not be ((Nil, Nil))
+      val country = world.getCountriesList(0)
+      val country1 = world.getCountriesList(1)
+      gameLogic.rollDice((country.getName, country.getOwner.getName, country.getTroops, country.getRefColor(), country.getNeighboringCountries.map(c => c.getName).asInstanceOf[List[String]]),
+        (country1.getName, country1.getOwner.getName, country1.getTroops, country1.getRefColor(), country1.getNeighboringCountries.map(c => c.getName).asInstanceOf[List[String]])) should not be ((Nil, Nil))
     }
   }
 
@@ -378,4 +389,4 @@ class GameLogicSpec extends WordSpec {
   //      player should be(gameLogic.getCurrentPlayer)
   //    }
   //  }
-}*/
+}

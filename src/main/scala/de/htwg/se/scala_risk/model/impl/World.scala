@@ -80,6 +80,13 @@ object World {
             world.getPlayerList.filter(p => p.getName == fields("player")).foreach(p => p.setTroops(fields("troops").toInt))
             complete("")
           }
+        } ~
+        path("fromxml") {
+          formFieldMap { fields =>
+            val xml = scala.xml.XML.load(new java.io.InputStreamReader(new java.io.ByteArrayInputStream(fields("xml").toCharArray.map(_.toByte)), "UTF-8"))
+            world.fromXml(xml)
+            complete("")
+          }
         }
       }
     val bindingFuture = Http().bindAndHandle(route, "0.0.0.0", PORT)
@@ -119,9 +126,9 @@ object World {
 
   private def getContinentList: String = {
     "[%s]".format(
-      world.getContinentList.map(c => """{"owner": "%s", "btroops": %d, "countries": [%s]}""".
+      world.getContinentList.map(c => """{"owner": "%s", "btroops": %d, "countries": [%s], "name": "%s"}""".
         format(c.getOwner().getName, c.getBonusTroops(), c.getIncludedCountries().map(count => """"%s"""".
-          format(count.getName)).mkString(", "))
+          format(count.getName)).mkString(", "), c.getName())
       ).mkString(", ")
     )
   }
