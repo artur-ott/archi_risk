@@ -9,23 +9,47 @@ import com.google.inject.Guice
 import de.htwg.se.scala_risk.controller.impl.{GameLogic => ImplGameLogic}
 import net.codingwell.scalaguice.InjectorExtensions._
 
+import scala.concurrent.Future
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.util.{Failure, Success, Try}
+
 
 object ScalaRisk {
+
   def main(args: Array[String]): Unit = {
 
     val injector = Guice.createInjector(RiskInjector)
 
-    val tui : TUI = injector.instance[TUI]
-    val gui : WelcomeScreen = injector.instance[WelcomeScreen]
+    def startTui : Try[TUI] = {
+      val tui : TUI = injector.instance[TUI]
+      Try(tui)
+    }
 
-   // val worldFactory = new WorldFactory()
-   // val world = worldFactory.getWorld()
-  //  val gameLogic = new ImplGameLogic(world)
-   // val tui : TUI = new TUI(gameLogic)
-    //val gui : WelcomeScreen = new WelcomeScreen(gameLogic)
+    val future1 = Future(startTui)
 
-    gui.setLocationRelativeTo(null)
-    gui.setVisible(true)
+    future1.onComplete {
+      case Success(tui) => println("tui successful started")
+      case Failure(e) => println("error starting TUI")
+    }
+
+    def startGui : Try[WelcomeScreen] = {
+      val gui : WelcomeScreen = injector.instance[WelcomeScreen]
+      Try(gui)
+    }
+
+    val future2 = Future(startGui)
+
+    future2.onComplete {
+      case Success(gui) => {
+        gui.get.setLocationRelativeTo(null)
+        gui.get.setVisible(true)
+        println("gui successful started")
+      }
+      case Failure(e) => println("error starting GUI")
+    }
+
+    // sleep loop is needed here to avoid program exits before futures completed.
+    while (true) sleep(1)
 
     /*
     val clip = AudioSystem.getClip();
@@ -37,4 +61,6 @@ object ScalaRisk {
 
 */
   }
+
+  def sleep(time: Long) { Thread.sleep(time) }
 }
