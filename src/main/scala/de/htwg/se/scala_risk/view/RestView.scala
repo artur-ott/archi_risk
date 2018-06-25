@@ -54,6 +54,14 @@ class RestView @Inject() (gameLogic: GameLogic) extends TObserver {
       path("endturn") {
         this.gameLogic.endTurn
         complete(HttpEntity(ContentTypes.`text/plain(UTF-8)`, ""))
+      } ~
+      path("save") {
+        this.gameLogic.saveGame
+        complete(HttpEntity(ContentTypes.`text/plain(UTF-8)`, ""))
+      } ~
+      path("load") {
+        this.gameLogic.loadGame
+        complete(HttpEntity(ContentTypes.`text/plain(UTF-8)`, ""))
       }
     } ~
     post {

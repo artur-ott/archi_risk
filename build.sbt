@@ -24,6 +24,8 @@ libraryDependencies ++= Seq(
   "com.typesafe.akka" %% "akka-http-testkit" % "10.1.1" % Test
 )
 
+libraryDependencies += "io.gatling.highcharts" % "gatling-charts-highcharts" % "2.3.1"
+
 // import com.github.retronym.SbtOneJar._
 
 // oneJarSettings
